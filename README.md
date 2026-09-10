@@ -20,6 +20,7 @@ expect it to sync up with BE as I regain connection.
 * I as a user can mark to-do items as 'done' - so that I can avoid clutter and focus on things that are still pending.
 
 * I as a user can change the order of tasks via drag & drop.
+
 * I as a user can add sub-tasks to my to-do items - so that I could make logical groups of
 tasks and see their overall progress.
 
