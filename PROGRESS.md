@@ -9,9 +9,11 @@
 Deployed and live at **https://ubiquiti-635h.onrender.com/**. Prisma schema (List/Todo/SubTask),
 local Postgres via docker-compose, and a Render-managed Postgres are all in place; the initial
 migration has been applied both locally and on Render (confirmed via deploy log — `prisma migrate
-deploy` ran clean). Lists REST API (create/read/rename) is implemented and manually verified
-locally. Building the API before any UI (see decisions below) — next up is Todos, then SubTasks,
-then a minimal UI to exercise it all.
+deploy` ran clean). Full REST API (Lists/Todos/SubTasks, per
+[specs/03-api-rest.md](specs/03-api-rest.md)) is implemented and manually verified locally
+against Postgres — create/read/update/delete, idempotent create+delete, `version` incrementing
+on update, 400/404 error cases. None of it is exercised through Render yet (not redeployed since
+before this API work), and there's still no UI — the frontend is just the hello-world scaffold.
 
 ## Environment
 
@@ -41,11 +43,14 @@ then a minimal UI to exercise it all.
 - [x] Prisma schema + initial migration, local Postgres via docker-compose
 - [x] Render Postgres created and connected; migration applied and verified live
 - [x] Lists REST API (POST/GET/PATCH `/api/lists`) — [specs/03-api-rest.md](specs/03-api-rest.md)
+- [x] Todos REST API (POST/PATCH/DELETE `/api/lists/:listId/todos`)
+- [x] SubTasks REST API (POST/PATCH/DELETE `/api/lists/:listId/todos/:todoId/subtasks`)
+- [x] Unified error shape (`{ error: { code, message } }`) across all error paths, including
+      malformed JSON and unmatched routes, not just handled ones — see
+      [specs/03-api-rest.md](specs/03-api-rest.md#error-shape)
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Todos REST API (`/api/lists/:listId/todos`)
-- [ ] SubTasks REST API (`/api/lists/:listId/todos/:todoId/subtasks`)
 - [ ] Minimal UI wired to the API (list view, create/toggle/delete)
 - [ ] Realtime protocol (Socket.IO events) — [specs/04-realtime-protocol.md](specs/04-realtime-protocol.md)
 - [ ] Sync / conflict resolution — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
