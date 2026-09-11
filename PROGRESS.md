@@ -10,10 +10,10 @@ Deployed and live at **https://ubiquiti-635h.onrender.com/**. Prisma schema (Lis
 local Postgres via docker-compose, and a Render-managed Postgres are all in place; the initial
 migration has been applied both locally and on Render (confirmed via deploy log — `prisma migrate
 deploy` ran clean). Full REST API (Lists/Todos/SubTasks, per
-[specs/03-api-rest.md](specs/03-api-rest.md)) is implemented and manually verified locally
-against Postgres — create/read/update/delete, idempotent create+delete, `version` incrementing
-on update, 400/404 error cases. None of it is exercised through Render yet (not redeployed since
-before this API work), and there's still no UI — the frontend is just the hello-world scaffold.
+[specs/03-api-rest.md](specs/03-api-rest.md)) is implemented with a unified error shape. A minimal
+UI (React Router + TanStack Query, no styling/DnD/markdown yet) is wired to it and browser-tested
+end-to-end locally: create list → add/toggle/delete todo → reload persists. None of this has been
+redeployed to Render yet (still running the pre-API hello-world build there).
 
 ## Environment
 
@@ -48,10 +48,18 @@ before this API work), and there's still no UI — the frontend is just the hell
 - [x] Unified error shape (`{ error: { code, message } }`) across all error paths, including
       malformed JSON and unmatched routes, not just handled ones — see
       [specs/03-api-rest.md](specs/03-api-rest.md#error-shape)
+- [x] Minimal UI: `LandingPage` (create list) + `ListPage` (add/toggle/delete todo), React Router
+      + TanStack Query per [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md).
+      No styling, drag-and-drop, markdown, or SubTask UI yet — browser-verified locally.
+- [x] Extracted query/mutations out of `ListPage` into `hooks/useList.ts` (pure refactor, no
+      behavior change, re-verified in browser) ahead of SubTask UI and realtime work needing the
+      same pattern — see the small-PRs-vs-foreseeable-rework rule in [CLAUDE.md](CLAUDE.md).
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Minimal UI wired to the API (list view, create/toggle/delete)
+- [ ] Redeploy to Render and verify the full API + UI work there too (not done since before the
+      REST API work — currently Render is still serving the old hello-world build)
+- [ ] SubTask UI (nested under each todo, mirroring the Todo UI pattern)
 - [ ] Realtime protocol (Socket.IO events) — [specs/04-realtime-protocol.md](specs/04-realtime-protocol.md)
 - [ ] Sync / conflict resolution — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
@@ -73,6 +81,9 @@ before this API work), and there's still no UI — the frontend is just the hell
   (curl/automated tests for API, browser for UI) rather than mixing both per task.
 - No codegen between Prisma models and the shared zod wire schemas — see
   [specs/02-data-model.md](specs/02-data-model.md#prisma-models-vs-shared-zod-schemas--no-codegen).
+- Frontend foundation (React Router + TanStack Query) added in the same task as the first minimal
+  UI, not deferred — these are structural per specs/07, not feature-specific, so adding them later
+  would mean reworking the fetch/mutation code written today.
 
 ## Open questions
 
