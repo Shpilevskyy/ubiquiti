@@ -5,6 +5,7 @@ import fastifyStatic from '@fastify/static';
 import { Server as SocketIOServer } from 'socket.io';
 import { SOCKET_EVENTS, type HelloResponse } from '@ubiquiti-todo/shared';
 import { listsRoutes } from './routes/lists.js';
+import { todosRoutes } from './routes/todos.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webDist = path.resolve(__dirname, '../../web/dist');
@@ -20,6 +21,7 @@ app.get('/api/hello', async (): Promise<HelloResponse> => ({
 }));
 
 await app.register(listsRoutes);
+await app.register(todosRoutes);
 
 if (isProduction) {
   await app.register(fastifyStatic, {

@@ -55,6 +55,24 @@ export const UpdateListBodySchema = z.object({
 });
 export type UpdateListBody = z.infer<typeof UpdateListBodySchema>;
 
+export const CreateTodoBodySchema = z.object({
+  id: z.uuid(),
+  title: z.string().min(1),
+  position: z.number(),
+  costCents: z.number().int().nullable().optional(),
+  descriptionMd: z.string().nullable().optional(),
+});
+export type CreateTodoBody = z.infer<typeof CreateTodoBodySchema>;
+
+export const UpdateTodoBodySchema = z.object({
+  title: z.string().min(1).optional(),
+  done: z.boolean().optional(),
+  position: z.number().optional(),
+  costCents: z.number().int().nullable().optional(),
+  descriptionMd: z.string().nullable().optional(),
+});
+export type UpdateTodoBody = z.infer<typeof UpdateTodoBodySchema>;
+
 export interface GetListResponse {
   list: List;
   todos: Todo[];
