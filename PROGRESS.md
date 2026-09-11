@@ -15,11 +15,13 @@ session by polling the live site/API after each push. Prisma schema (List/Todo/S
 Postgres via docker-compose, and a Render-managed Postgres are all in place; migrations applied
 both locally and on Render. Full REST API (Lists/Todos/SubTasks, per
 [specs/03-api-rest.md](specs/03-api-rest.md)) is implemented with a unified error shape.
-Offline sync was verified against a real production bug: the user tested it live (two browsers,
-airplane-mode-style offline, added todos), both were silently lost on reconnect — confirming the
-exact gap already documented as "step 4 not yet built." Step 4 (this session) fixed it; re-verified
-by reproducing the same scenario locally end-to-end, including the 404 (parent-deleted-elsewhere)
-path and survival across a hard reload.
+Offline sync was hardened against two rounds of real-device testing this session, not just
+simulated scenarios: (1) the user tested live (two browsers, real offline, added todos) and both
+were silently lost on reconnect — the exact gap already documented as "step 4 not yet built,"
+fixed by building the flush; (2) a second round with real Wi-Fi toggling found Chrome (unlike
+Safari) needed a manual reload to sync, traced to the `online` DOM event being unreliable for
+real network changes — fixed with an event-independent 15s poll fallback. Both fixes verified by
+reproducing the exact failure mode before and after.
 
 ## Environment
 
