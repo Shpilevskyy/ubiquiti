@@ -215,9 +215,22 @@ reproducing the exact failure mode before and after.
       an `online` event at all (simulating Chrome's missed event), and confirmed the poll alone
       delivered it to the server (and cleared the pill) within ~18s with no other trigger firing.
 
+- [x] Extracted `TodoItem`/`SubtaskItem`/`TodoList` components out of `ListPage`'s inline JSX
+      (`apps/web/src/components/`), matching the component tree in
+      [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md) — pure refactor, no
+      behavior change. Done now (not deferred) because [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md)
+      needs each todo/subtask row to be its own component regardless: `dnd-kit`'s `useSortable` is
+      a hook, so it can't be called inline inside a `.map()` — see the small-PRs-vs-foreseeable-
+      rework rule in [CLAUDE.md](CLAUDE.md). Browser-verified: add/toggle/delete subtask still
+      works through the new component boundary, no console errors, list state unchanged after the
+      test. Clean full build.
+
 ## Next up (in rough order, mapped to specs)
-- [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)
-- [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md)
+- [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md): now unblocked by the
+      component extraction above. Still needed: add `dnd-kit`, `DndContext`/`SortableContext` in
+      `TodoList` (todos) and in `TodoItem` (subtasks, separate context, no cross-todo dragging per
+      spec), the fractional-position `newPosition` computation client-side, wiring `onDragEnd` to
+      the existing outbox mutate path, and the epsilon/re-index fallback described in the spec.
 - [ ] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md)
 - [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)
 - [ ] Make repo private after reviewer has seen it
