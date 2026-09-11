@@ -6,14 +6,16 @@
 
 ## Snapshot (2026-09-11)
 
-Deployed and live at **https://ubiquiti-635h.onrender.com/**. Prisma schema (List/Todo/SubTask),
-local Postgres via docker-compose, and a Render-managed Postgres are all in place; the initial
-migration has been applied both locally and on Render (confirmed via deploy log — `prisma migrate
-deploy` ran clean). Full REST API (Lists/Todos/SubTasks, per
-[specs/03-api-rest.md](specs/03-api-rest.md)) is implemented with a unified error shape. A minimal
-UI (React Router + TanStack Query, no styling/DnD/markdown yet) is wired to it and browser-tested
-end-to-end locally: create list → add/toggle/delete todo → reload persists. None of this has been
-redeployed to Render yet (still running the pre-API hello-world build there).
+Deployed and live at **https://ubiquiti-635h.onrender.com/**, now serving the full REST API +
+minimal UI (Render auto-deployed on push, no manual redeploy needed). Prisma schema
+(List/Todo/SubTask), local Postgres via docker-compose, and a Render-managed Postgres are all in
+place; the initial migration has been applied both locally and on Render (confirmed via deploy log
+— `prisma migrate deploy` ran clean). Full REST API (Lists/Todos/SubTasks, per
+[specs/03-api-rest.md](specs/03-api-rest.md)) is implemented with a unified error shape. The
+minimal UI (React Router + TanStack Query, no styling/DnD/markdown yet) is browser-tested
+end-to-end both locally and now live on Render: create list → add/toggle/delete todo → full page
+reload persists (verified against the live Render Postgres, including client-side route
+`/list/:id` surviving a hard reload, i.e. SPA fallback routing works in production too).
 
 ## Environment
 
@@ -54,12 +56,16 @@ redeployed to Render yet (still running the pre-API hello-world build there).
 - [x] Extracted query/mutations out of `ListPage` into `hooks/useList.ts` (pure refactor, no
       behavior change, re-verified in browser) ahead of SubTask UI and realtime work needing the
       same pattern — see the small-PRs-vs-foreseeable-rework rule in [CLAUDE.md](CLAUDE.md).
+- [x] Verified Render auto-deployed the REST API + UI work (no manual redeploy was needed) and
+      browser-tested the live site end-to-end: create list → add/toggle/delete todo → hard reload
+      persists via Render Postgres.
+- [x] SubTask UI: add/toggle/delete subtasks nested under each todo, mirroring the Todo UI pattern
+      (`createSubTask`/`toggleSubTask`/`deleteSubTask` added to `useList`, per-todo new-subtask
+      input state in `ListPage`). Browser-verified locally, including persistence across reload.
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Redeploy to Render and verify the full API + UI work there too (not done since before the
-      REST API work — currently Render is still serving the old hello-world build)
-- [ ] SubTask UI (nested under each todo, mirroring the Todo UI pattern)
+- [ ] Redeploy/verify the SubTask UI on Render once this is pushed
 - [ ] Realtime protocol (Socket.IO events) — [specs/04-realtime-protocol.md](specs/04-realtime-protocol.md)
 - [ ] Sync / conflict resolution — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)

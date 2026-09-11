@@ -1,11 +1,14 @@
 import type {
   CreateListBody,
+  CreateSubTaskBody,
   CreateTodoBody,
   ErrorResponse,
   GetListResponse,
   List,
+  SubTask,
   Todo,
   UpdateListBody,
+  UpdateSubTaskBody,
   UpdateTodoBody,
 } from '@ubiquiti-todo/shared';
 
@@ -47,4 +50,21 @@ export const api = {
 
   deleteTodo: (listId: string, todoId: string) =>
     request<void>(`/lists/${listId}/todos/${todoId}`, { method: 'DELETE' }),
+
+  createSubTask: (listId: string, todoId: string, body: CreateSubTaskBody) =>
+    request<{ subtask: SubTask }>(`/lists/${listId}/todos/${todoId}/subtasks`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updateSubTask: (listId: string, todoId: string, subtaskId: string, body: UpdateSubTaskBody) =>
+    request<{ subtask: SubTask }>(`/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteSubTask: (listId: string, todoId: string, subtaskId: string) =>
+    request<void>(`/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, {
+      method: 'DELETE',
+    }),
 };

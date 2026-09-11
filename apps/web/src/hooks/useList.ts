@@ -32,5 +32,32 @@ export function useList(listId: string | undefined) {
     onSuccess: invalidate,
   });
 
-  return { listQuery, createTodo, toggleTodo, deleteTodo };
+  const createSubTask = useMutation({
+    mutationFn: ({ todoId, title }: { todoId: string; title: string }) =>
+      // Same Date.now() placeholder ordering key as createTodo — see the comment there.
+      api.createSubTask(listId!, todoId, { id: crypto.randomUUID(), title, position: Date.now() }),
+    onSuccess: invalidate,
+  });
+
+  const toggleSubTask = useMutation({
+    mutationFn: ({ todoId, subtaskId, done }: { todoId: string; subtaskId: string; done: boolean }) =>
+      api.updateSubTask(listId!, todoId, subtaskId, { done }),
+    onSuccess: invalidate,
+  });
+
+  const deleteSubTask = useMutation({
+    mutationFn: ({ todoId, subtaskId }: { todoId: string; subtaskId: string }) =>
+      api.deleteSubTask(listId!, todoId, subtaskId),
+    onSuccess: invalidate,
+  });
+
+  return {
+    listQuery,
+    createTodo,
+    toggleTodo,
+    deleteTodo,
+    createSubTask,
+    toggleSubTask,
+    deleteSubTask,
+  };
 }
