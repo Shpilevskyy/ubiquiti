@@ -1,4 +1,6 @@
 import type { FormEvent } from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Todo } from '@ubiquiti-todo/shared';
 import { SubtaskItem } from './SubtaskItem';
 
@@ -23,9 +25,21 @@ export function TodoItem({
   onSubTaskTitleChange,
   onAddSubTask,
 }: TodoItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
   return (
-    <li className="rounded-lg py-2">
+    <li ref={setNodeRef} style={style} className={`rounded-lg py-2 ${isDragging ? 'opacity-50' : ''}`}>
       <div className="group flex items-center gap-3">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          className="cursor-grab touch-none text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        >
+          ⠿
+        </button>
         <input
           type="checkbox"
           checked={todo.done}

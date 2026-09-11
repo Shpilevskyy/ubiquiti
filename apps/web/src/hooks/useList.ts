@@ -229,6 +229,27 @@ export function useList(listId: string | undefined) {
       ),
   });
 
+  // Reordering (specs/08-drag-and-drop.md): the dragged-to position is computed client-side
+  // (lib/position.ts) before this is called. Optimistically re-sorting by position after setting
+  // it (rather than splicing the array to the drop index) keeps this consistent with how the
+  // server always returns todos — ordered by position — so a later refetch/broadcast never
+  // visually jumps the item elsewhere.
+  const reorderTodo = useMutation({
+    ...OFFLINE_AWARE,
+    mutationFn: ({ todoId, position }: { todoId: string; position: number }) =>
+      mutateWithOutbox(
+        { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { position } },
+        (old) =>
+          old &&
+          produce(old, (draft) => {
+            const todo = draft.todos.find((t) => t.id === todoId);
+            if (!todo) return;
+            todo.position = position;
+            draft.todos.sort((a, b) => a.position - b.position);
+          }),
+      ),
+  });
+
   const createSubTask = useMutation({
     ...OFFLINE_AWARE,
     mutationFn: ({ todoId, title }: { todoId: string; title: string }) => {
@@ -322,6 +343,7 @@ export function useList(listId: string | undefined) {
     createTodo,
     toggleTodo,
     deleteTodo,
+    reorderTodo,
     createSubTask,
     toggleSubTask,
     deleteSubTask,

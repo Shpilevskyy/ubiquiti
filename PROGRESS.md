@@ -225,12 +225,38 @@ reproducing the exact failure mode before and after.
       works through the new component boundary, no console errors, list state unchanged after the
       test. Clean full build.
 
+- [x] Drag and drop, todos only — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md): added
+      `@dnd-kit/core`+`sortable`+`utilities`. `TodoList` wraps the todo `<ul>` in a
+      `DndContext`/`SortableContext` (pointer + keyboard sensors); `TodoItem` calls `useSortable`
+      and exposes a dedicated drag-handle button (`listeners`/`attributes` scoped to the handle,
+      not the whole row, so it doesn't fight the checkbox/delete click targets). `onDragEnd`
+      computes the new fractional `position` client-side
+      (`apps/web/src/lib/position.ts#computeReorderPosition`, using `arrayMove` to find the new
+      neighbors then averaging them per the spec's formula) and sends it through a new
+      `reorderTodo` mutation — same `mutateWithOutbox` path as every other mutation, so a reorder
+      made offline queues and flushes like any other change. The optimistic cache update re-sorts
+      `draft.todos` by `position` (matching how the server's `GET` already orders them) rather than
+      splicing to the drop index, so a later refetch/broadcast can't visually jump the item.
+      **Not done**: subtask reordering (dragging within a todo) — needs its own `SortableContext`
+      per todo and, importantly, `orderBy: { position: 'asc' }` added to every server route that
+      returns `subtasks` (`lists.ts`, `todos.ts` — currently unordered, a latent gap independent of
+      drag-and-drop that only starts to matter once subtasks can be reordered). Also not done: the
+      spec's epsilon/re-index fallback for float-precision collisions — documented as a known,
+      rare-path limitation in `position.ts`, consistent with how other multi-step features here
+      (e.g. offline sync) have shipped the common case first with gaps tracked, not silently
+      dropped.
+      Browser-verified: dragged a todo from the bottom to the top via its handle, watched the
+      reorder happen instantly, hard-reloaded and confirmed the new order persisted from the
+      server. A stray batch of hook-order/"more than one copy of React" console errors showed up
+      once, traced to the shared dev server (another session's) re-optimizing its Vite dep cache
+      mid-session after `npm install` added the new packages — confirmed harmless by opening a
+      fresh tab against the same server, which loaded clean with no errors and the correct
+      persisted order. Clean full build.
+
 ## Next up (in rough order, mapped to specs)
-- [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md): now unblocked by the
-      component extraction above. Still needed: add `dnd-kit`, `DndContext`/`SortableContext` in
-      `TodoList` (todos) and in `TodoItem` (subtasks, separate context, no cross-todo dragging per
-      spec), the fractional-position `newPosition` computation client-side, wiring `onDragEnd` to
-      the existing outbox mutate path, and the epsilon/re-index fallback described in the spec.
+- [ ] Drag and drop, subtasks — see "Not done" above: per-todo `SortableContext` in `TodoItem`,
+      `SubtaskItem` gets the same `useSortable`+handle treatment as `TodoItem`, a `reorderSubTask`
+      mutation mirroring `reorderTodo`, and the server-side `orderBy` fix for `subtasks` includes.
 - [ ] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md)
 - [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)
 - [ ] Make repo private after reviewer has seen it
