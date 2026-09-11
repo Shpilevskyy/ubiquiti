@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { Server as SocketIOServer } from 'socket.io';
 import { SOCKET_EVENTS, type HelloResponse } from '@ubiquiti-todo/shared';
+import { listsRoutes } from './routes/lists.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webDist = path.resolve(__dirname, '../../web/dist');
@@ -17,6 +18,8 @@ app.get('/api/hello', async (): Promise<HelloResponse> => ({
   message: 'Hello from the server 👋',
   timestamp: new Date().toISOString(),
 }));
+
+await app.register(listsRoutes);
 
 if (isProduction) {
   await app.register(fastifyStatic, {

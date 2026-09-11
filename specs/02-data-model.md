@@ -91,3 +91,25 @@ link to a list that doesn't exist on the server yet).
 ## Cascade behavior
 
 Deleting a List deletes its Todos (cascade); deleting a Todo deletes its SubTasks (cascade).
+
+## Prisma models vs. shared zod schemas — no codegen
+
+`packages/shared` hand-declares `List`/`Todo`/`SubTask` as zod schemas (wire/API shapes) separate
+from the Prisma models (DB shapes) in this file, rather than generating one from the other via a
+tool like `zod-prisma-types`.
+
+Rejected: a generator would only cover the *read* shapes, and would produce `z.date()` for
+timestamps where the wire format needs `z.string()` (JSON has no native date type) — request
+body schemas (`CreateListBodySchema`, `UpdateListBodySchema`) intentionally exclude fields like
+`id`/`version`/`createdAt` and would still need to be hand-written regardless. At 3 models the
+generator's dependency and generator-step overhead outweighs the boilerplate it would save.
+
+This is also safer than plain duplication would suggest: the server's serializers
+(`serializeList`/`serializeTodo`/`serializeSubTask` in `apps/server/src/routes/lists.ts`) map
+from the actual Prisma-generated field types, so renaming or removing a DB column fails the
+build immediately. A new Prisma field silently *not* appearing on the wire type is the one gap —
+treated as correct behavior (a field should be opted into the public API deliberately, not leak
+onto the wire by default).
+
+Revisit if the schema grows substantially (many more models/fields) and the hand-written
+read-shape boilerplate becomes the bulk of the diff on schema changes.
