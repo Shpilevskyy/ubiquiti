@@ -313,6 +313,24 @@ export function useList(listId: string | undefined) {
     },
   });
 
+  // See reorderTodo above — same idea, one level down.
+  const reorderSubTask = useMutation({
+    ...OFFLINE_AWARE,
+    mutationFn: ({ todoId, subtaskId, position }: { todoId: string; subtaskId: string; position: number }) =>
+      mutateWithOutbox(
+        { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, body: { position } },
+        (old) =>
+          old &&
+          produce(old, (draft) => {
+            const todo = draft.todos.find((t) => t.id === todoId);
+            const subtask = todo?.subtasks.find((s) => s.id === subtaskId);
+            if (!todo || !subtask) return;
+            subtask.position = position;
+            todo.subtasks.sort((a, b) => a.position - b.position);
+          }),
+      ),
+  });
+
   const deleteSubTask = useMutation({
     ...OFFLINE_AWARE,
     mutationFn: ({ todoId, subtaskId }: { todoId: string; subtaskId: string }) =>
@@ -346,6 +364,7 @@ export function useList(listId: string | undefined) {
     reorderTodo,
     createSubTask,
     toggleSubTask,
+    reorderSubTask,
     deleteSubTask,
     deleteList,
     conflictNotice: notice,

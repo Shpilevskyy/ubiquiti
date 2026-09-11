@@ -1,3 +1,5 @@
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { SubTask } from '@ubiquiti-todo/shared';
 
 interface SubtaskItemProps {
@@ -7,8 +9,24 @@ interface SubtaskItemProps {
 }
 
 export function SubtaskItem({ subtask, onToggle, onDelete }: SubtaskItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: subtask.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
   return (
-    <li className="group flex items-center gap-3">
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`group flex items-center gap-3 ${isDragging ? 'opacity-50' : ''}`}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
+        className="cursor-grab touch-none text-xs text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+      >
+        ⠿
+      </button>
       <input
         type="checkbox"
         checked={subtask.done}

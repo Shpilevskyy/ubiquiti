@@ -20,6 +20,7 @@ interface TodoListProps {
   onReorderTodo: (todoId: string, position: number) => void;
   onToggleSubTask: (todoId: string, subtaskId: string, done: boolean, baseVersion: number) => void;
   onDeleteSubTask: (todoId: string, subtaskId: string) => void;
+  onReorderSubTask: (todoId: string, subtaskId: string, position: number) => void;
   newSubTaskTitles: Record<string, string>;
   onSubTaskTitleChange: (todoId: string, value: string) => void;
   onAddSubTask: (event: FormEvent, todoId: string) => void;
@@ -32,6 +33,7 @@ export function TodoList({
   onReorderTodo,
   onToggleSubTask,
   onDeleteSubTask,
+  onReorderSubTask,
   newSubTaskTitles,
   onSubTaskTitleChange,
   onAddSubTask,
@@ -62,6 +64,7 @@ export function TodoList({
                 onToggleSubTask(todo.id, subtaskId, done, baseVersion)
               }
               onDeleteSubTask={(subtaskId) => onDeleteSubTask(todo.id, subtaskId)}
+              onReorderSubTask={(subtaskId, position) => onReorderSubTask(todo.id, subtaskId, position)}
               newSubTaskTitle={newSubTaskTitles[todo.id] ?? ''}
               onSubTaskTitleChange={(value) => onSubTaskTitleChange(todo.id, value)}
               onAddSubTask={(event) => onAddSubTask(event, todo.id)}

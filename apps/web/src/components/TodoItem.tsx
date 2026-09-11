@@ -1,7 +1,17 @@
 import type { FormEvent } from 'react';
-import { useSortable } from '@dnd-kit/sortable';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Todo } from '@ubiquiti-todo/shared';
+import { computeReorderPosition } from '../lib/position';
 import { SubtaskItem } from './SubtaskItem';
 
 interface TodoItemProps {
@@ -10,6 +20,7 @@ interface TodoItemProps {
   onDelete: () => void;
   onToggleSubTask: (subtaskId: string, done: boolean, baseVersion: number) => void;
   onDeleteSubTask: (subtaskId: string) => void;
+  onReorderSubTask: (subtaskId: string, position: number) => void;
   newSubTaskTitle: string;
   onSubTaskTitleChange: (value: string) => void;
   onAddSubTask: (event: FormEvent) => void;
@@ -21,12 +32,26 @@ export function TodoItem({
   onDelete,
   onToggleSubTask,
   onDeleteSubTask,
+  onReorderSubTask,
   newSubTaskTitle,
   onSubTaskTitleChange,
   onAddSubTask,
 }: TodoItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
+
+  // Subtasks get their own drag context — no cross-todo dragging, per specs/08-drag-and-drop.md.
+  const subtaskSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleSubTaskDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const position = computeReorderPosition(todo.subtasks, String(active.id), String(over.id));
+    onReorderSubTask(String(active.id), position);
+  }
 
   return (
     <li ref={setNodeRef} style={style} className={`rounded-lg py-2 ${isDragging ? 'opacity-50' : ''}`}>
@@ -57,16 +82,23 @@ export function TodoItem({
         </button>
       </div>
 
-      <ul className="ml-7 mt-1 flex flex-col gap-1 border-l border-slate-200 pl-4">
-        {todo.subtasks.map((subtask) => (
-          <SubtaskItem
-            key={subtask.id}
-            subtask={subtask}
-            onToggle={() => onToggleSubTask(subtask.id, !subtask.done, subtask.version)}
-            onDelete={() => onDeleteSubTask(subtask.id)}
-          />
-        ))}
-      </ul>
+      <DndContext sensors={subtaskSensors} collisionDetection={closestCenter} onDragEnd={handleSubTaskDragEnd}>
+        <SortableContext
+          items={todo.subtasks.map((subtask) => subtask.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <ul className="ml-7 mt-1 flex flex-col gap-1 border-l border-slate-200 pl-4">
+            {todo.subtasks.map((subtask) => (
+              <SubtaskItem
+                key={subtask.id}
+                subtask={subtask}
+                onToggle={() => onToggleSubTask(subtask.id, !subtask.done, subtask.version)}
+                onDelete={() => onDeleteSubTask(subtask.id)}
+              />
+            ))}
+          </ul>
+        </SortableContext>
+      </DndContext>
 
       <form onSubmit={onAddSubTask} className="ml-7 mt-1 flex gap-2 pl-4">
         <input

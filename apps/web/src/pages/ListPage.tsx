@@ -21,6 +21,7 @@ export function ListPage() {
     reorderTodo,
     createSubTask,
     toggleSubTask,
+    reorderSubTask,
     deleteSubTask,
     deleteList,
     conflictNotice,
@@ -112,6 +113,9 @@ export function ListPage() {
             toggleSubTask.mutate({ todoId, subtaskId, done, baseVersion })
           }
           onDeleteSubTask={(todoId, subtaskId) => deleteSubTask.mutate({ todoId, subtaskId })}
+          onReorderSubTask={(todoId, subtaskId, position) =>
+            reorderSubTask.mutate({ todoId, subtaskId, position })
+          }
           newSubTaskTitles={newSubTaskTitles}
           onSubTaskTitleChange={(todoId, value) =>
             setNewSubTaskTitles((titles) => ({ ...titles, [todoId]: value }))

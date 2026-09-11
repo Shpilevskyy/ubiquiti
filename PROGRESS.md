@@ -253,10 +253,22 @@ reproducing the exact failure mode before and after.
       fresh tab against the same server, which loaded clean with no errors and the correct
       persisted order. Clean full build.
 
+- [x] Drag and drop, subtasks — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md), completing
+      the feature. `TodoItem` now wraps its subtask `<ul>` in its own `DndContext`/`SortableContext`
+      (separate from `TodoList`'s, and from every other todo's — no cross-todo subtask dragging,
+      per spec); `SubtaskItem` got the same `useSortable`+drag-handle treatment as `TodoItem`. New
+      `reorderSubTask` mutation in `useList` mirrors `reorderTodo` exactly (same
+      `computeReorderPosition` helper, same outbox path, same re-sort-by-position optimistic
+      update). Also fixed the ordering gap noted above: every server route returning `subtasks`
+      (`lists.ts`'s `GET`, and all three `include`s in `todos.ts`) now has `orderBy: { position:
+      'asc' }` — without it, a subtask reorder would look right instantly (client-side re-sort) but
+      revert to insertion order on the next fetch/reload.
+      Browser-verified: added two subtasks under a todo, dragged the second above the first via its
+      handle, hard-reloaded and confirmed the new order persisted (proving the server-side
+      `orderBy` fix, not just the optimistic client state). Checked console on a fresh tab — clean,
+      no errors. Clean full build.
+
 ## Next up (in rough order, mapped to specs)
-- [ ] Drag and drop, subtasks — see "Not done" above: per-todo `SortableContext` in `TodoItem`,
-      `SubtaskItem` gets the same `useSortable`+handle treatment as `TodoItem`, a `reorderSubTask`
-      mutation mirroring `reorderTodo`, and the server-side `orderBy` fix for `subtasks` includes.
 - [ ] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md)
 - [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)
 - [ ] Make repo private after reviewer has seen it

@@ -35,7 +35,12 @@ export async function listsRoutes(app: FastifyInstance) {
   app.get<{ Params: { listId: string } }>('/api/lists/:listId', async (request, reply) => {
     const list = await prisma.list.findUnique({
       where: { id: request.params.listId },
-      include: { todos: { include: { subtasks: true }, orderBy: { position: 'asc' } } },
+      include: {
+        todos: {
+          include: { subtasks: { orderBy: { position: 'asc' } } },
+          orderBy: { position: 'asc' },
+        },
+      },
     });
 
     if (!list) {

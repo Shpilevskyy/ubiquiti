@@ -24,7 +24,7 @@ export async function todosRoutes(app: FastifyInstance) {
 
     const existing = await prisma.todo.findUnique({
       where: { id: body.data.id },
-      include: { subtasks: true },
+      include: { subtasks: { orderBy: { position: 'asc' } } },
     });
     if (existing) {
       return { todo: serializeTodo(existing) };
@@ -39,7 +39,7 @@ export async function todosRoutes(app: FastifyInstance) {
         costCents: body.data.costCents ?? null,
         descriptionMd: body.data.descriptionMd ?? null,
       },
-      include: { subtasks: true },
+      include: { subtasks: { orderBy: { position: 'asc' } } },
     });
     const serialized = serializeTodo(todo);
     app.broadcaster.broadcastToList(
@@ -74,7 +74,7 @@ export async function todosRoutes(app: FastifyInstance) {
         const todo = await prisma.todo.update({
           where: { id: request.params.todoId },
           data: { ...updateData, version: { increment: 1 } },
-          include: { subtasks: true },
+          include: { subtasks: { orderBy: { position: 'asc' } } },
         });
         const serialized = serializeTodo(todo);
         app.broadcaster.broadcastToList(
