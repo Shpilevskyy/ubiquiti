@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
+import { useConnectionStatus } from '../hooks/useConnectionStatus';
 import { useList } from '../hooks/useList';
 import { useListSocket } from '../hooks/useListSocket';
 
@@ -9,6 +10,7 @@ export function ListPage() {
   const [newSubTaskTitles, setNewSubTaskTitles] = useState<Record<string, string>>({});
 
   const others = useListSocket(listId);
+  const connectionStatus = useConnectionStatus();
 
   const {
     listQuery,
@@ -70,6 +72,11 @@ export function ListPage() {
           <h1 className="text-xl font-semibold text-slate-900">{list.title}</h1>
 
           <div className="flex items-center gap-3">
+            {connectionStatus === 'offline' && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                Offline
+              </span>
+            )}
             {others.length > 0 && (
               <div className="flex -space-x-2">
                 {others.map((member) => (

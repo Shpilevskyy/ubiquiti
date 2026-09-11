@@ -13,17 +13,26 @@ import {
   type UpdateSubTaskBody,
   type UpdateTodoBody,
 } from '@ubiquiti-todo/shared';
+import { connectionStatus } from './connectionStatus';
 import { getMember } from './member';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    ...init,
-    headers: {
-      [CLIENT_ID_HEADER]: getMember().id,
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      ...init,
+      headers: {
+        [CLIENT_ID_HEADER]: getMember().id,
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch (err) {
+    // A network error (not an HTTP error status) — mark offline immediately rather than waiting
+    // for the browser's own online/offline events, see specs/06-offline-sync.md.
+    connectionStatus.markOffline();
+    throw err;
+  }
 
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as ErrorResponse | null;

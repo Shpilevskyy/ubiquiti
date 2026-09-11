@@ -17,6 +17,7 @@ import {
   type List,
   type SubTask,
 } from '@ubiquiti-todo/shared';
+import { connectionStatus } from '../lib/connectionStatus';
 import { getMember } from '../lib/member';
 
 // Subscribes to the realtime change events for one list (specs/04-realtime-protocol.md) and
@@ -52,7 +53,16 @@ export function useListSocket(listId: string | undefined): Member[] {
       );
     }
 
-    socket.on('connect', join);
+    socket.on('connect', () => {
+      join();
+      connectionStatus.markOnline();
+    });
+
+    // Ignore our own intentional disconnect (navigating away, cleanup below) — only a real drop
+    // should flip the global connectivity signal offline.
+    socket.on('disconnect', (reason) => {
+      if (reason !== 'io client disconnect') connectionStatus.markOffline();
+    });
 
     socket.on(SOCKET_EVENTS.PRESENCE_UPDATE, ({ members }: PresenceUpdatePayload) => {
       setOthers(members.filter((m) => m.id !== selfId));

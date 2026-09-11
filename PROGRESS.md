@@ -111,10 +111,24 @@ are the only deletable resources) are harmless clutter with no UI path to reach 
       list" button on `ListPage` and per-row "Delete" on the landing page, both confirm-gated.
       Realtime: a `list:deleted` broadcast invalidates the list query in any other open tab. Both
       deviate from specs/00's access-by-link scoping — see Decisions below.
+- [x] Offline sync, step 1/4 — connectivity detection: `lib/connectionStatus.ts` is a global
+      online/offline signal (not just `navigator.onLine`, per
+      [specs/06-offline-sync.md](specs/06-offline-sync.md)) fed by Socket.IO connect/disconnect
+      (`useListSocket`, ignoring our own intentional disconnect on navigation-away), a failed
+      `fetch` (`lib/api.ts`), and the browser's online/offline events. `useConnectionStatus`
+      (`useSyncExternalStore`) exposes it; `ListPage` shows an "Offline" pill when set. Purely
+      additive/observational so far — doesn't change mutation behavior yet; that's steps 2-4
+      (IndexedDB outbox, routing mutations through it with optimistic updates, flush-on-reconnect)
+      still to come. Browser-verified by dispatching real `online`/`offline` window events and
+      confirming the pill appears/disappears; the socket-disconnect and fetch-failure paths call
+      the identical `markOffline`/`markOnline` functions so weren't separately re-verified live
+      (would've meant disrupting the shared dev server another session had running).
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
+- [ ] Offline sync, steps 2-4 — [specs/06-offline-sync.md](specs/06-offline-sync.md): IndexedDB
+      outbox (`idb-keyval`), route `useList`'s mutations through it with optimistic updates, then
+      flush-on-reconnect (FIFO, backoff, 404-drop-and-toast)
 - [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)
 - [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md)
 - [ ] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md)
