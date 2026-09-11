@@ -196,6 +196,22 @@ path and survival across a hard reload.
       toast fired, the dead op was dropped (outbox left clean, not stuck retrying), and the other
       three todos were unaffected. Full monorepo build clean, no console errors beyond the
       expected/handled 404 from that last test.
+      **Second round of real-device feedback, same session**: after deploying the above, the user
+      tested with real Wi-Fi toggling (not simulated) in two browsers — Safari recovered on its
+      own, Chrome needed a manual reload to show the synced data. Root cause: browsers are
+      inconsistent about firing the `online` DOM event for a genuine network change (a
+      well-documented Chrome weak spot in particular), and Socket.IO's reconnect can lag behind a
+      real drop too — so neither of `flushOutbox`'s two triggers is guaranteed to fire promptly on
+      every browser. Fixed by no longer gating `flushOutbox` on `connectionStatus`'s belief at
+      all (a failed `sendOp` already means "stays queued," so attempting while actually offline
+      just costs one harmless wasted request) and adding an unconditional 15s poll
+      (`FLUSH_POLL_MS`) as a third, event-independent trigger — self-healing regardless of whether
+      either event ever fires. Also: a successful `sendOp` now calls `connectionStatus.markOnline()`
+      directly, so a successful poll-triggered flush also clears a stuck "Offline" pill that no
+      real `online` event would otherwise have cleared.
+      Browser-verified the exact failure mode: queued an op offline, deliberately never dispatched
+      an `online` event at all (simulating Chrome's missed event), and confirmed the poll alone
+      delivered it to the server (and cleared the pill) within ~18s with no other trigger firing.
 
 ## Next up (in rough order, mapped to specs)
 - [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)

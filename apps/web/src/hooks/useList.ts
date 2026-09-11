@@ -9,6 +9,12 @@ import { dequeue, enqueue, getQueue, type QueuedOp } from '../lib/outbox';
 
 const FLUSH_RETRY_BASE_MS = 2000;
 const FLUSH_RETRY_MAX_MS = 30000;
+// Belt-and-braces beyond the spec's two triggers: browsers are inconsistent about firing the
+// online/offline DOM events for a *real* network change (as opposed to devtools-simulated
+// offline) — Chrome in particular can miss them, so a queued op could otherwise sit stuck until
+// the user manually reloads. Polling regardless of what connectionStatus currently believes makes
+// this self-healing without depending on any single event actually firing.
+const FLUSH_POLL_MS = 15000;
 
 const CONFLICT_MESSAGE = 'This item was also edited elsewhere';
 const now = () => new Date().toISOString();
@@ -90,15 +96,18 @@ export function useList(listId: string | undefined) {
   // Flushing the outbox (specs/06-offline-sync.md): replay queued ops for this list in FIFO
   // order, awaiting each response before sending the next (preserves the order they were made
   // in, and means a create always lands before a PATCH/DELETE that depends on it). Triggered by
-  // connectionStatus going online — which already aggregates both of the spec's two triggers
-  // (Socket.IO connect/reconnect and the browser online event), so this hook doesn't need to
-  // wire either one separately — and once on mount, in case a previous offline session left
-  // ops queued and the tab was reopened already online.
+  // connectionStatus going online (aggregating the spec's two triggers — Socket.IO
+  // connect/reconnect and the browser online event) for promptness, once on mount for a queue
+  // left over from a previous session, and by a periodic poll (see FLUSH_POLL_MS) as a fallback
+  // for when neither event fires. Deliberately doesn't gate on connectionStatus's belief that
+  // we're online — a failed sendOp already means "leave it queued," so attempting when we might
+  // actually be offline just costs one wasted request rather than something worth guarding
+  // against, and not gating on it is what makes the poll fallback work at all.
   const flushRetryDelayRef = useRef(FLUSH_RETRY_BASE_MS);
   const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   async function flushOutbox() {
-    if (!listId || connectionStatus.getStatus() !== 'online') return;
+    if (!listId) return;
 
     let sentAny = false;
     while (true) {
@@ -109,6 +118,11 @@ export function useList(listId: string | undefined) {
         await sendOp(op);
         await dequeue(listId, op.opId);
         sentAny = true;
+        // A successful request is the strongest possible evidence we're online — feeds back into
+        // the belief connectionStatus tracks (and the "Offline" pill reads), so a successful poll
+        // fallback flush also self-heals a pill left stuck offline by a browser that never fired
+        // the online event in the first place.
+        connectionStatus.markOnline();
       } catch (err) {
         if (err instanceof HttpError && err.status === 404) {
           await dequeue(listId, op.opId);
@@ -134,13 +148,15 @@ export function useList(listId: string | undefined) {
     const unsubscribe = connectionStatus.subscribe(() => {
       if (connectionStatus.getStatus() === 'online') flushOutbox();
     });
+    const pollId = setInterval(flushOutbox, FLUSH_POLL_MS);
     return () => {
       unsubscribe();
+      clearInterval(pollId);
       clearTimeout(flushTimeoutRef.current);
     };
-    // Deliberately keyed on listId alone: flushOutbox always reads listId/getStatus() fresh
-    // (they're not stale-closure-sensitive here), and re-keying on it would tear down and
-    // re-subscribe on every render instead of just when the list actually changes.
+    // Deliberately keyed on listId alone: flushOutbox always reads listId fresh (not
+    // stale-closure-sensitive here), and re-keying on it would tear down and re-subscribe/
+    // re-poll on every render instead of just when the list actually changes.
   }, [listId]);
 
   // TanStack Query has its own network-awareness — by default (networkMode: 'online') it pauses
