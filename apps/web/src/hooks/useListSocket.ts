@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   SOCKET_EVENTS,
   type GetListResponse,
+  type ListDeletedPayload,
   type ListJoinPayload,
   type ListLeavePayload,
   type Member,
@@ -59,6 +60,13 @@ export function useListSocket(listId: string | undefined): Member[] {
 
     socket.on(SOCKET_EVENTS.LIST_UPDATED, ({ list }: { list: List }) => {
       queryClient.setQueryData<GetListResponse>(queryKey, (old) => (old ? { ...old, list } : old));
+    });
+
+    // Someone else deleted this list from under us — invalidate so the query refetches, 404s,
+    // and the page's existing "Failed to load list" error branch takes over. No dedicated UI for
+    // this; that message ("List not found") already says what happened.
+    socket.on(SOCKET_EVENTS.LIST_DELETED, ({ listId: deletedId }: ListDeletedPayload) => {
+      if (deletedId === listId) queryClient.invalidateQueries({ queryKey });
     });
 
     socket.on(SOCKET_EVENTS.TODO_CREATED, ({ todo }: { todo: Todo }) => {

@@ -5,6 +5,7 @@ import {
   type CreateTodoBody,
   type ErrorResponse,
   type GetListResponse,
+  type GetListsResponse,
   type List,
   type SubTask,
   type Todo,
@@ -40,10 +41,14 @@ export const api = {
   createList: (body: CreateListBody) =>
     request<{ list: List }>('/lists', { method: 'POST', body: JSON.stringify(body) }),
 
+  getLists: () => request<GetListsResponse>('/lists'),
+
   getList: (listId: string) => request<GetListResponse>(`/lists/${listId}`),
 
   updateList: (listId: string, body: UpdateListBody) =>
     request<{ list: List }>(`/lists/${listId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  deleteList: (listId: string) => request<void>(`/lists/${listId}`, { method: 'DELETE' }),
 
   createTodo: (listId: string, body: CreateTodoBody) =>
     request<{ todo: Todo }>(`/lists/${listId}/todos`, { method: 'POST', body: JSON.stringify(body) }),

@@ -10,6 +10,7 @@ export const SOCKET_EVENTS = {
   LIST_JOIN: 'list:join',
   LIST_LEAVE: 'list:leave',
   LIST_UPDATED: 'list:updated',
+  LIST_DELETED: 'list:deleted',
   TODO_CREATED: 'todo:created',
   TODO_UPDATED: 'todo:updated',
   TODO_DELETED: 'todo:deleted',
@@ -109,6 +110,10 @@ export interface GetListResponse {
   todos: Todo[];
 }
 
+export interface GetListsResponse {
+  lists: List[];
+}
+
 // The header a client sends on every mutation request so the server can exclude that client's
 // socket(s) from the realtime broadcast for that mutation — see specs/04-realtime-protocol.md.
 export const CLIENT_ID_HEADER = 'x-client-id';
@@ -129,6 +134,9 @@ export interface ListLeavePayload {
 }
 export interface PresenceUpdatePayload {
   members: Member[];
+}
+export interface ListDeletedPayload {
+  listId: string;
 }
 export interface TodoDeletedPayload {
   todoId: string;

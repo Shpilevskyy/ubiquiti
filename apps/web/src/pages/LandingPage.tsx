@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
 export function LandingPage() {
@@ -7,6 +8,18 @@ export function LandingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const listsQuery = useQuery({ queryKey: ['lists'], queryFn: api.getLists });
+
+  const deleteList = useMutation({
+    mutationFn: (listId: string) => api.deleteList(listId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lists'] }),
+  });
+
+  function handleDeleteList(id: string, listTitle: string) {
+    if (!window.confirm(`Delete "${listTitle}" and everything in it? This can't be undone.`)) return;
+    deleteList.mutate(id);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -47,6 +60,33 @@ export function LandingPage() {
         </form>
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        {listsQuery.data && listsQuery.data.lists.length > 0 && (
+          <div className="mt-6 border-t border-slate-200 pt-6">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Existing lists
+            </h2>
+            <ul className="mt-3 flex flex-col gap-1">
+              {listsQuery.data.lists.map((list) => (
+                <li key={list.id} className="group flex items-center gap-1">
+                  <Link
+                    to={`/list/${list.id}`}
+                    className="block flex-1 truncate rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600"
+                  >
+                    {list.title}
+                  </Link>
+                  <button
+                    onClick={() => handleDeleteList(list.id, list.title)}
+                    disabled={deleteList.isPending}
+                    className="shrink-0 px-1 text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </main>
   );

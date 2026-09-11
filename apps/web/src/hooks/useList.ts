@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
 const CONFLICT_MESSAGE = 'This item was also edited elsewhere';
 
 export function useList(listId: string | undefined) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const queryKey = ['list', listId];
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
 
@@ -13,6 +15,9 @@ export function useList(listId: string | undefined) {
     queryKey,
     queryFn: () => api.getList(listId!),
     enabled: Boolean(listId),
+    // A missing list is permanent (deleted, or a bad link) — retrying it like a transient network
+    // error just delays the "not found" state by several seconds of default backoff.
+    retry: false,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
@@ -79,6 +84,14 @@ export function useList(listId: string | undefined) {
     onSuccess: invalidate,
   });
 
+  const deleteList = useMutation({
+    mutationFn: () => api.deleteList(listId!),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey });
+      navigate('/');
+    },
+  });
+
   return {
     listQuery,
     createTodo,
@@ -87,6 +100,7 @@ export function useList(listId: string | undefined) {
     createSubTask,
     toggleSubTask,
     deleteSubTask,
+    deleteList,
     conflictNotice,
     dismissConflictNotice: () => setConflictNotice(null),
   };

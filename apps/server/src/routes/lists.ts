@@ -6,6 +6,8 @@ import {
   SOCKET_EVENTS,
   UpdateListBodySchema,
   type GetListResponse,
+  type GetListsResponse,
+  type ListDeletedPayload,
 } from '@ubiquiti-todo/shared';
 import { prisma } from '../prisma.js';
 import { serializeList, serializeTodo } from '../serializers.js';
@@ -19,6 +21,15 @@ export async function listsRoutes(app: FastifyInstance) {
 
     const list = await prisma.list.create({ data: { title: body.data.title } });
     return { list: serializeList(list) };
+  });
+
+  // No user accounts, so there's no concept of "your lists" — this just lists every list that
+  // exists. Deliberately public: fine for a demo app, deviates from specs/00-overview.md's
+  // access-by-link scoping, see PROGRESS.md.
+  app.get('/api/lists', async () => {
+    const lists = await prisma.list.findMany({ orderBy: { updatedAt: 'desc' } });
+    const response: GetListsResponse = { lists: lists.map(serializeList) };
+    return response;
   });
 
   app.get<{ Params: { listId: string } }>('/api/lists/:listId', async (request, reply) => {
@@ -63,5 +74,22 @@ export async function listsRoutes(app: FastifyInstance) {
       }
       throw err;
     }
+  });
+
+  app.delete<{ Params: { listId: string } }>('/api/lists/:listId', async (request, reply) => {
+    // deleteMany, not delete, so this is idempotent (deleting an already-gone list still 204s) —
+    // same convention as the todo/subtask deletes, see specs/03-api-rest.md#idempotency-via-client-generated-ids.
+    // Todos/SubTasks cascade via the schema's onDelete: Cascade, no manual cleanup needed.
+    const { count } = await prisma.list.deleteMany({ where: { id: request.params.listId } });
+    if (count > 0) {
+      const payload: ListDeletedPayload = { listId: request.params.listId };
+      app.broadcaster.broadcastToList(
+        request.params.listId,
+        request.headers[CLIENT_ID_HEADER] as string | undefined,
+        SOCKET_EVENTS.LIST_DELETED,
+        payload,
+      );
+    }
+    return reply.code(204).send();
   });
 }

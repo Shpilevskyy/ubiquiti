@@ -18,6 +18,7 @@ export function ListPage() {
     createSubTask,
     toggleSubTask,
     deleteSubTask,
+    deleteList,
     conflictNotice,
     dismissConflictNotice,
   } = useList(listId);
@@ -57,26 +58,40 @@ export function ListPage() {
     setNewSubTaskTitles((titles) => ({ ...titles, [todoId]: '' }));
   }
 
+  function handleDeleteList() {
+    if (!window.confirm(`Delete "${list.title}" and everything in it? This can't be undone.`)) return;
+    deleteList.mutate();
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto w-full max-w-xl rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl font-semibold text-slate-900">{list.title}</h1>
 
-          {others.length > 0 && (
-            <div className="flex -space-x-2">
-              {others.map((member) => (
-                <span
-                  key={member.id}
-                  title={`${member.name} is viewing`}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium text-white ring-2 ring-white"
-                  style={{ backgroundColor: member.color }}
-                >
-                  {member.name[0]?.toUpperCase()}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {others.length > 0 && (
+              <div className="flex -space-x-2">
+                {others.map((member) => (
+                  <span
+                    key={member.id}
+                    title={`${member.name} is viewing`}
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium text-white ring-2 ring-white"
+                    style={{ backgroundColor: member.color }}
+                  >
+                    {member.name[0]?.toUpperCase()}
+                  </span>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={handleDeleteList}
+              disabled={deleteList.isPending}
+              className="text-xs text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Delete list
+            </button>
+          </div>
         </div>
 
         <ul className="mt-6 flex flex-col gap-1">

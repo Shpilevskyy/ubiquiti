@@ -7,15 +7,17 @@
 ## Snapshot (2026-09-11)
 
 Deployed and live at **https://ubiquiti-635h.onrender.com/**, now serving the full REST API +
-minimal UI (Render auto-deployed on push, no manual redeploy needed). Prisma schema
+Tailwind-styled UI with realtime sync, presence, and stale-write conflict detection (Render
+auto-deployed on push, no manual redeploy needed — confirmed again this session: pushed, polled
+the live API until the new `hadConflict` field appeared, ~1 minute). Prisma schema
 (List/Todo/SubTask), local Postgres via docker-compose, and a Render-managed Postgres are all in
-place; the initial migration has been applied both locally and on Render (confirmed via deploy log
-— `prisma migrate deploy` ran clean). Full REST API (Lists/Todos/SubTasks, per
-[specs/03-api-rest.md](specs/03-api-rest.md)) is implemented with a unified error shape. The
-minimal UI (React Router + TanStack Query, no styling/DnD/markdown yet) is browser-tested
-end-to-end both locally and now live on Render: create list → add/toggle/delete todo → full page
-reload persists (verified against the live Render Postgres, including client-side route
-`/list/:id` surviving a hard reload, i.e. SPA fallback routing works in production too).
+place; the initial migration has been applied both locally and on Render. Full REST API
+(Lists/Todos/SubTasks, per [specs/03-api-rest.md](specs/03-api-rest.md)) is implemented with a
+unified error shape. The conflict-detection toast was browser-verified directly on the live prod
+site (not just locally) by spoofing the tab's own `X-Client-Id` on an out-of-band curl PATCH to
+force a real stale-write race, confirming the toast fires on production. Leftover empty test
+lists from this verification (no list-delete endpoint exists per spec — deliberate, todos/subtasks
+are the only deletable resources) are harmless clutter with no UI path to reach them.
 
 ## Environment
 
@@ -104,10 +106,14 @@ reload persists (verified against the live Render Postgres, including client-sid
       links (that's the rest of [specs/10-sharing-and-presence.md](specs/10-sharing-and-presence.md),
       left for later if wanted). Browser-verified with two tabs: avatar appears when the second
       tab joins and disappears when it closes.
+- [x] Public list directory + deletion: `GET /api/lists` (all lists) shown on `LandingPage`,
+      `DELETE /api/lists/:listId` (cascades Todos/SubTasks via the schema) wired to a "Delete
+      list" button on `ListPage` and per-row "Delete" on the landing page, both confirm-gated.
+      Realtime: a `list:deleted` broadcast invalidates the list query in any other open tab. Both
+      deviate from specs/00's access-by-link scoping — see Decisions below.
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Redeploy/verify everything above on Render once this is pushed
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
 - [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)
 - [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md)
@@ -129,6 +135,20 @@ reload persists (verified against the live Render Postgres, including client-sid
 - Frontend foundation (React Router + TanStack Query) added in the same task as the first minimal
   UI, not deferred — these are structural per specs/07, not feature-specific, so adding them later
   would mean reworking the fetch/mutation code written today.
+- Added `GET /api/lists` (list every list, no auth) and show it on the landing page — deviates
+  from [specs/00-overview.md](specs/00-overview.md#out-of-scope)'s "no 'my lists' dashboard"
+  scoping, which was reasoned around lists being access-by-link/private. Explicit user call: this
+  is a skills-demo app that won't hold real data, so trading that privacy property for landing-page
+  discoverability is fine here — not a decision to carry into a real deployment unmodified.
+- Added `DELETE /api/lists/:listId` (not in specs/03's endpoint table) alongside the public
+  listing above — once lists are publicly browsable/creatable with no ownership, there needs to
+  be a way to clean them up. Idempotent (`deleteMany`, 204 either way), same convention as the
+  todo/subtask deletes; Todos/SubTasks cascade via the schema's existing `onDelete: Cascade`, no
+  manual cleanup code needed. Broadcasts a new `list:deleted` socket event so a tab that has the
+  list open when someone else deletes it gets its query invalidated and falls into the existing
+  "Failed to load list: List not found" error branch — no dedicated UI built for that case.
+  "Delete list"/"Delete" buttons added to `ListPage` and the landing page's list rows, both behind
+  a native `confirm()` given the cascade is irreversible.
 
 ## Open questions
 
