@@ -9,8 +9,9 @@
 Deployed and live at **https://ubiquiti-635h.onrender.com/**. Prisma schema (List/Todo/SubTask),
 local Postgres via docker-compose, and a Render-managed Postgres are all in place; the initial
 migration has been applied both locally and on Render (confirmed via deploy log — `prisma migrate
-deploy` ran clean). Server and `/healthz`/`/api/hello` verified live (200s). No API routes touch
-the DB yet — next up is the actual REST API (still just hello-world endpoints today).
+deploy` ran clean). Lists REST API (create/read/rename) is implemented and manually verified
+locally. Building the API before any UI (see decisions below) — next up is Todos, then SubTasks,
+then a minimal UI to exercise it all.
 
 ## Environment
 
@@ -39,10 +40,13 @@ the DB yet — next up is the actual REST API (still just hello-world endpoints 
 - [x] Deployed scaffold to Render as a Web Service, `/healthz` + hello-world API/WS all working
 - [x] Prisma schema + initial migration, local Postgres via docker-compose
 - [x] Render Postgres created and connected; migration applied and verified live
+- [x] Lists REST API (POST/GET/PATCH `/api/lists`) — [specs/03-api-rest.md](specs/03-api-rest.md)
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] REST API — [specs/03-api-rest.md](specs/03-api-rest.md)
+- [ ] Todos REST API (`/api/lists/:listId/todos`)
+- [ ] SubTasks REST API (`/api/lists/:listId/todos/:todoId/subtasks`)
+- [ ] Minimal UI wired to the API (list view, create/toggle/delete)
 - [ ] Realtime protocol (Socket.IO events) — [specs/04-realtime-protocol.md](specs/04-realtime-protocol.md)
 - [ ] Sync / conflict resolution — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
@@ -59,6 +63,11 @@ the DB yet — next up is the actual REST API (still just hello-world endpoints 
   covers both web service and DB for a demo-length review window).
 - Ruled out GitHub Pages / Render Static Site entirely — this app needs a persistent server
   process (WebSocket + API), which static hosting can't provide.
+- Sequencing: building the full REST API (Lists → Todos → SubTasks) before any UI work, then a
+  UI task per resource — keeps each task small/reviewable and each layer independently testable
+  (curl/automated tests for API, browser for UI) rather than mixing both per task.
+- No codegen between Prisma models and the shared zod wire schemas — see
+  [specs/02-data-model.md](specs/02-data-model.md#prisma-models-vs-shared-zod-schemas--no-codegen).
 
 ## Open questions
 
