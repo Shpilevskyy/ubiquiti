@@ -67,12 +67,16 @@ reload persists (verified against the live Render Postgres, including client-sid
       only, no restyle yet. `src/vite-env.d.ts` added (was missing) so `tsc` recognizes the CSS
       side-effect import; verified with a clean `npm run build` and no visual/console regressions
       on the still-unstyled pages.
+- [x] Restyled `LandingPage`/`ListPage` with Tailwind utility classes (replaced all inline
+      `style={}` props) — card layout, indigo/slate palette straight from Tailwind's default
+      theme (no custom design tokens — deliberately, to keep styling cost low per
+      [specs/01-architecture.md](specs/01-architecture.md)'s rationale), hover-revealed Delete
+      buttons, indented subtasks with a left border. Browser-verified locally end-to-end
+      (create/toggle/delete todo + subtask) with a clean production build.
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Redeploy/verify the SubTask UI on Render once this is pushed
-- [ ] Restyle `LandingPage`/`ListPage` with Tailwind utility classes (replace the inline `style={}`
-      props) now that the Tailwind pipeline is wired in
+- [ ] Redeploy/verify the SubTask UI + restyle on Render once this is pushed
 - [ ] Realtime protocol (Socket.IO events) — [specs/04-realtime-protocol.md](specs/04-realtime-protocol.md)
 - [ ] Sync / conflict resolution — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
