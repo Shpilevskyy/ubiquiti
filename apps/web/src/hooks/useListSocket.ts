@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
+import { produce } from 'immer';
 import {
   SOCKET_EVENTS,
   type GetListResponse,
@@ -45,11 +46,15 @@ export function useListSocket(listId: string | undefined): Member[] {
       socket.emit(SOCKET_EVENTS.LIST_JOIN, payload);
     }
 
-    function updateTodo(todoId: string, update: (todo: Todo) => Todo) {
+    // recipe mutates the draft todo directly (Immer) — reaching into its subtasks array is the
+    // one genuinely nested update in this file, so it's the one place that benefits from it.
+    function updateTodo(todoId: string, recipe: (todo: Todo) => void) {
       queryClient.setQueryData<GetListResponse>(queryKey, (old) =>
-        old
-          ? { ...old, todos: old.todos.map((todo) => (todo.id === todoId ? update(todo) : todo)) }
-          : old,
+        old &&
+        produce(old, (draft) => {
+          const todo = draft.todos.find((t) => t.id === todoId);
+          if (todo) recipe(todo);
+        }),
       );
     }
 
@@ -100,25 +105,22 @@ export function useListSocket(listId: string | undefined): Member[] {
     });
 
     socket.on(SOCKET_EVENTS.SUBTASK_CREATED, ({ todoId, subtask }: SubTaskCreatedPayload) => {
-      updateTodo(todoId, (todo) =>
-        todo.subtasks.some((existing) => existing.id === subtask.id)
-          ? todo
-          : { ...todo, subtasks: [...todo.subtasks, subtask] },
-      );
+      updateTodo(todoId, (todo) => {
+        if (!todo.subtasks.some((s) => s.id === subtask.id)) todo.subtasks.push(subtask);
+      });
     });
 
     socket.on(SOCKET_EVENTS.SUBTASK_UPDATED, ({ todoId, subtask }: SubTaskUpdatedPayload) => {
-      updateTodo(todoId, (todo) => ({
-        ...todo,
-        subtasks: todo.subtasks.map((existing: SubTask) => (existing.id === subtask.id ? subtask : existing)),
-      }));
+      updateTodo(todoId, (todo) => {
+        const index = todo.subtasks.findIndex((s: SubTask) => s.id === subtask.id);
+        if (index !== -1) todo.subtasks[index] = subtask;
+      });
     });
 
     socket.on(SOCKET_EVENTS.SUBTASK_DELETED, ({ todoId, subtaskId }: SubTaskDeletedPayload) => {
-      updateTodo(todoId, (todo) => ({
-        ...todo,
-        subtasks: todo.subtasks.filter((existing: SubTask) => existing.id !== subtaskId),
-      }));
+      updateTodo(todoId, (todo) => {
+        todo.subtasks = todo.subtasks.filter((s: SubTask) => s.id !== subtaskId);
+      });
     });
 
     return () => {

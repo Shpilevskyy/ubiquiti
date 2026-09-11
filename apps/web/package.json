@@ -19,6 +19,8 @@
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",
     "@ubiquiti-todo/shared": "0.0.1",
+    "idb-keyval": "^6.3.0",
+    "immer": "^11.1.18",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.3",

@@ -123,12 +123,62 @@ are the only deletable resources) are harmless clutter with no UI path to reach 
       confirming the pill appears/disappears; the socket-disconnect and fetch-failure paths call
       the identical `markOffline`/`markOnline` functions so weren't separately re-verified live
       (would've meant disrupting the shared dev server another session had running).
+- [x] Offline sync, step 2/4 — IndexedDB outbox: `lib/outbox.ts` (`idb-keyval`) is the queue data
+      structure from [specs/06-offline-sync.md](specs/06-offline-sync.md) — one ordered array of
+      `QueuedOp` per list, keyed so lists never interleave. `getQueue`/`enqueue`/`dequeue`. Not
+      wired into any mutation flow yet (step 3). Browser-verified via the dev server's console
+      (nothing imports this module yet, so there was no UI path to exercise it through): FIFO
+      order preserved across two enqueues, `dequeue` removes the right op, and — the actual point
+      of using IndexedDB over an in-memory array — a queued op survives a full page reload.
+- [x] Offline sync, step 3/4 — route mutations through the outbox: `useList`'s `mutateWithOutbox`
+      helper applies an optimistic update to the cache, persists the op to the outbox, then (if
+      `connectionStatus` says online) sends it — dequeuing + refetching to reconcile on success,
+      dropping + toasting on a 404 (parent deleted elsewhere), leaving it queued on any other
+      failure. All six Todo/SubTask mutations in `useList` now go through this; `deleteList`
+      deliberately doesn't (destructive/irreversible, and List has no `version` column so it's
+      outside the conflict/outbox model entirely).
+      **Bug found and fixed along the way**: TanStack Query's own `networkMode: 'online'` default
+      was silently pausing every mutation — never even calling `mutationFn` — whenever it believed
+      the browser was offline, since its internal `onlineManager` listens to the same
+      `window` online/offline events `connectionStatus` does. That's a second, competing offline
+      strategy that pre-empted ours entirely; fixed with `networkMode: 'always'` on all six
+      mutations so our own connectivity check is the only one in control. Found via targeted debug
+      logging after optimistic updates silently did nothing while offline — the mutation was never
+      running at all, not failing.
+      **Related gap confirmed, left for step 4**: TanStack's `refetchOnReconnect`/
+      `refetchOnWindowFocus` defaults (also wired to the same window events) mean any refetch
+      trigger — not just a page reload — while an op is still queued-but-unsent will silently
+      overwrite the optimistic entry in the cache with server truth, making it disappear from the
+      UI even though it's still safely persisted in the outbox (verified: dispatching a real
+      `online` event caused exactly this, and the op was still in IndexedDB afterward). Step 4
+      needs to disable those two refetch triggers for the list query and instead flush the outbox
+      itself before any reconnect-driven refetch.
+      Browser-verified end-to-end: dispatched a real `offline` window event, added a todo — it
+      appeared immediately and was confirmed queued in IndexedDB (not sent, network request log
+      confirmed zero attempts); toggling a todo online still works and leaves the outbox empty
+      (sent + dequeued). Full monorepo build clean, no console errors.
+- [x] Refactor: Immer for nested optimistic-cache updates — user feedback that the hand-rolled
+      nested spread/map/ternary chains in `useList.ts` (from step 3) were hard to read. Swapped
+      those six `applyOptimistic` functions for `produce(old, (draft) => { ... })` recipes that
+      mutate the draft directly (e.g. `todo.done = done` instead of rebuilding the whole
+      `{ ...old, todos: old.todos.map(...) }` tree by hand). Also checked the rest of the codebase
+      for the same shape: `useListSocket.ts`'s `updateTodo` helper (backing the three
+      `SUBTASK_*` realtime handlers) had the identical nested-merge problem and got the same
+      treatment; its four single-level handlers (`LIST_UPDATED`/`TODO_CREATED`/`TODO_UPDATED`/
+      `TODO_DELETED`) were left as plain spreads — already flat enough that Immer wouldn't
+      clarify anything. No other nested-merge sites found elsewhere in the app. Pure refactor, no
+      behavior change: browser-verified all three realtime `SUBTASK_*` handlers (created via curl
+      from a spoofed second client, applied live to the open tab) and re-ran the offline-add +
+      online-toggle outbox scenarios from step 3, all unchanged. Full build clean, no console
+      errors.
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Offline sync, steps 2-4 — [specs/06-offline-sync.md](specs/06-offline-sync.md): IndexedDB
-      outbox (`idb-keyval`), route `useList`'s mutations through it with optimistic updates, then
-      flush-on-reconnect (FIFO, backoff, 404-drop-and-toast)
+- [ ] Offline sync, step 4/4 — [specs/06-offline-sync.md](specs/06-offline-sync.md): flush the
+      outbox on reconnect (FIFO per list, awaiting each response; 404 drops the op + toast; 5xx/
+      network error stops the flush and retries with backoff), and disable
+      `refetchOnReconnect`/`refetchOnWindowFocus` on the list query so a refetch never clobbers a
+      not-yet-flushed optimistic change (see the gap noted in step 3, just above)
 - [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)
 - [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md)
 - [ ] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md)
