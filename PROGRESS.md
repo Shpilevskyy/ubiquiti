@@ -6,8 +6,9 @@
 
 ## Snapshot (2026-09-11)
 
-Monorepo scaffold is built and deployed to Render as a hello-world (no real app features yet).
-No database is connected. Next up: build the actual data model + API per specs.
+Monorepo scaffold is deployed to Render as a hello-world. Prisma schema (List/Todo/SubTask) and
+local Postgres via docker-compose are now in place, with an initial migration generated and
+applied locally. No API routes use the DB yet — next up is the REST API.
 
 ## Environment
 
@@ -20,8 +21,15 @@ No database is connected. Next up: build the actual data model + API per specs.
   skip devDependencies (vite, typescript, @types/react, etc.), breaking the `tsc` build step.
 - **Start command**: `npm run start`
 - **Env vars set on Render**: `NODE_ENV=production`
-- **Postgres**: not yet created/connected. Plan is Render-managed Postgres, `DATABASE_URL`
-  env var, Prisma migrations (see [specs/12-deployment.md](specs/12-deployment.md)).
+- **Postgres**: local only so far, via `docker compose up -d postgres` (see
+  [docker-compose.yml](docker-compose.yml)). `apps/server/.env.example` has the local
+  `DATABASE_URL` — copy to `apps/server/.env` to run migrations/dev locally. Render Postgres not
+  yet created; plan is Render-managed instance + `DATABASE_URL` env var on the Web Service (see
+  [specs/12-deployment.md](specs/12-deployment.md)).
+- Server `build` now runs `prisma generate` first; `start` runs `prisma migrate deploy` before
+  booting, so migrations apply automatically on each Render deploy once `DATABASE_URL` is set
+  there. Until then, `npm run start` in production would fail without `DATABASE_URL` — expected,
+  since Postgres isn't connected on Render yet.
 
 ## Completed
 
