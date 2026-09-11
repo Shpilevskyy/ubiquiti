@@ -18,6 +18,8 @@ export function ListPage() {
     createSubTask,
     toggleSubTask,
     deleteSubTask,
+    conflictNotice,
+    dismissConflictNotice,
   } = useList(listId);
 
   if (!listId) return null;
@@ -84,7 +86,9 @@ export function ListPage() {
                 <input
                   type="checkbox"
                   checked={todo.done}
-                  onChange={() => toggleTodo.mutate({ todoId: todo.id, done: !todo.done })}
+                  onChange={() =>
+                    toggleTodo.mutate({ todoId: todo.id, done: !todo.done, baseVersion: todo.version })
+                  }
                   className="h-4 w-4 shrink-0 accent-indigo-600"
                 />
                 <span
@@ -111,6 +115,7 @@ export function ListPage() {
                           todoId: todo.id,
                           subtaskId: subtask.id,
                           done: !subtask.done,
+                          baseVersion: subtask.version,
                         })
                       }
                       className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
@@ -170,6 +175,16 @@ export function ListPage() {
           </button>
         </form>
       </div>
+
+      {conflictNotice && (
+        <div
+          role="status"
+          onClick={dismissConflictNotice}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 cursor-pointer rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg"
+        >
+          {conflictNotice}
+        </div>
+      )}
     </main>
   );
 }

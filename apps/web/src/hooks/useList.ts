@@ -1,9 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api } from '../lib/api';
+
+const CONFLICT_MESSAGE = 'This item was also edited elsewhere';
 
 export function useList(listId: string | undefined) {
   const queryClient = useQueryClient();
   const queryKey = ['list', listId];
+  const [conflictNotice, setConflictNotice] = useState<string | null>(null);
 
   const listQuery = useQuery({
     queryKey,
@@ -12,6 +16,15 @@ export function useList(listId: string | undefined) {
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
+
+  // See specs/05-sync-conflict-resolution.md's stale-write indicator: the server always applies
+  // the write and just tells us whether it clobbered a change we hadn't seen yet. Soft signal
+  // only — nothing here blocks or undoes anything.
+  const noteConflict = (hadConflict: boolean) => {
+    if (!hadConflict) return;
+    setConflictNotice(CONFLICT_MESSAGE);
+    window.setTimeout(() => setConflictNotice(null), 4000);
+  };
 
   const createTodo = useMutation({
     mutationFn: (title: string) =>
@@ -22,9 +35,12 @@ export function useList(listId: string | undefined) {
   });
 
   const toggleTodo = useMutation({
-    mutationFn: ({ todoId, done }: { todoId: string; done: boolean }) =>
-      api.updateTodo(listId!, todoId, { done }),
-    onSuccess: invalidate,
+    mutationFn: ({ todoId, done, baseVersion }: { todoId: string; done: boolean; baseVersion: number }) =>
+      api.updateTodo(listId!, todoId, { done, baseVersion }),
+    onSuccess: (data) => {
+      invalidate();
+      noteConflict(data.hadConflict);
+    },
   });
 
   const deleteTodo = useMutation({
@@ -40,9 +56,21 @@ export function useList(listId: string | undefined) {
   });
 
   const toggleSubTask = useMutation({
-    mutationFn: ({ todoId, subtaskId, done }: { todoId: string; subtaskId: string; done: boolean }) =>
-      api.updateSubTask(listId!, todoId, subtaskId, { done }),
-    onSuccess: invalidate,
+    mutationFn: ({
+      todoId,
+      subtaskId,
+      done,
+      baseVersion,
+    }: {
+      todoId: string;
+      subtaskId: string;
+      done: boolean;
+      baseVersion: number;
+    }) => api.updateSubTask(listId!, todoId, subtaskId, { done, baseVersion }),
+    onSuccess: (data) => {
+      invalidate();
+      noteConflict(data.hadConflict);
+    },
   });
 
   const deleteSubTask = useMutation({
@@ -59,5 +87,7 @@ export function useList(listId: string | undefined) {
     createSubTask,
     toggleSubTask,
     deleteSubTask,
+    conflictNotice,
+    dismissConflictNotice: () => setConflictNotice(null),
   };
 }

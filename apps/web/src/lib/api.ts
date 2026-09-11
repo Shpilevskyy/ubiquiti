@@ -49,7 +49,7 @@ export const api = {
     request<{ todo: Todo }>(`/lists/${listId}/todos`, { method: 'POST', body: JSON.stringify(body) }),
 
   updateTodo: (listId: string, todoId: string, body: UpdateTodoBody) =>
-    request<{ todo: Todo }>(`/lists/${listId}/todos/${todoId}`, {
+    request<{ todo: Todo; hadConflict: boolean }>(`/lists/${listId}/todos/${todoId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
@@ -64,10 +64,10 @@ export const api = {
     }),
 
   updateSubTask: (listId: string, todoId: string, subtaskId: string, body: UpdateSubTaskBody) =>
-    request<{ subtask: SubTask }>(`/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    }),
+    request<{ subtask: SubTask; hadConflict: boolean }>(
+      `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
 
   deleteSubTask: (listId: string, todoId: string, subtaskId: string) =>
     request<void>(`/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, {

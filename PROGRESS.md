@@ -85,16 +85,19 @@ reload persists (verified against the live Render Postgres, including client-sid
       Browser-verified with two tabs open on the same list: create/toggle/delete on both todos
       and subtasks in one tab appear live in the other with no reload. Clean full production
       build (`shared` + `web` + `server`).
-- [x] Sync/conflict detection, server-side half — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md):
+- [x] Sync/conflict detection — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md):
       `UpdateTodoBodySchema`/`UpdateSubTaskBodySchema` gained an optional `baseVersion`; the
       PATCH routes for todos and subtasks compare it against the row's current `version` before
       applying the write (which always applies, per the whole-record-LWW rule) and return
       `hadConflict: true` when the row changed since the client last saw it. Delete-wins was
-      already correct (PATCHing a deleted row 404s). Verified with curl against a throwaway
-      server instance on a spare port (not the dev server already running for another session)
-      exercising all four cases: fresh write, stale write, no-`baseVersion` write, patch-after-delete.
-      Client-side half (sending `baseVersion`, showing the toast) is deliberately deferred to a
-      follow-up step — this PR is server + shared schema only.
+      already correct (PATCHing a deleted row 404s). Server-side verified with curl against a
+      throwaway server instance exercising all four cases: fresh write, stale write, no-`baseVersion`
+      write, patch-after-delete. Client (`useList`'s `toggleTodo`/`toggleSubTask`) now sends the
+      cached `version` as `baseVersion` and shows a non-blocking, auto-dismissing toast ("This item
+      was also edited elsewhere") in `ListPage` when `hadConflict` comes back true. Browser-verified
+      by spoofing the tab's own `X-Client-Id` on an out-of-band curl PATCH (so the realtime
+      broadcast — which normally keeps tabs in sync and would mask the race — excluded this tab),
+      confirming the toast fires and auto-dismisses after 4s without blocking the checkbox.
 - [x] Presence indicator: `useListSocket` now also returns who else is viewing the list (from
       `presence:update`), rendered in `ListPage` as small colored initial avatars next to the
       title, live-updating as tabs join/leave. Deliberately minimal — no name editing or join
@@ -105,9 +108,6 @@ reload persists (verified against the live Render Postgres, including client-sid
 ## Next up (in rough order, mapped to specs)
 
 - [ ] Redeploy/verify everything above on Render once this is pushed
-- [ ] Sync / conflict resolution, client-side half — send `baseVersion` on todo/subtask PATCHes
-      and show a non-blocking toast when `hadConflict` comes back true (server half is done, see
-      Completed above) — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
 - [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)
 - [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md)
