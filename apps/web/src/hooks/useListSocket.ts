@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,6 +6,8 @@ import {
   type GetListResponse,
   type ListJoinPayload,
   type ListLeavePayload,
+  type Member,
+  type PresenceUpdatePayload,
   type SubTaskCreatedPayload,
   type SubTaskDeletedPayload,
   type SubTaskUpdatedPayload,
@@ -19,12 +21,18 @@ import { getMember } from '../lib/member';
 // Subscribes to the realtime change events for one list (specs/04-realtime-protocol.md) and
 // applies them to the TanStack Query cache directly, so collaborators' edits show up without a
 // refetch. REST responses remain the source of truth for the tab that made the change — this
-// hook is only for what *other* tabs/clients need to see.
-export function useListSocket(listId: string | undefined) {
+// hook is only for what *other* tabs/clients need to see. Also returns who else is currently
+// viewing the list, from the server's presence broadcasts.
+export function useListSocket(listId: string | undefined): Member[] {
   const queryClient = useQueryClient();
+  const [others, setOthers] = useState<Member[]>([]);
+  const selfId = getMember().id;
 
   useEffect(() => {
-    if (!listId) return;
+    if (!listId) {
+      setOthers([]);
+      return;
+    }
 
     const queryKey = ['list', listId];
     const socket = io();
@@ -44,6 +52,10 @@ export function useListSocket(listId: string | undefined) {
     }
 
     socket.on('connect', join);
+
+    socket.on(SOCKET_EVENTS.PRESENCE_UPDATE, ({ members }: PresenceUpdatePayload) => {
+      setOthers(members.filter((m) => m.id !== selfId));
+    });
 
     socket.on(SOCKET_EVENTS.LIST_UPDATED, ({ list }: { list: List }) => {
       queryClient.setQueryData<GetListResponse>(queryKey, (old) => (old ? { ...old, list } : old));
@@ -95,6 +107,9 @@ export function useListSocket(listId: string | undefined) {
       const payload: ListLeavePayload = { listId };
       socket.emit(SOCKET_EVENTS.LIST_LEAVE, payload);
       socket.disconnect();
+      setOthers([]);
     };
-  }, [listId, queryClient]);
+  }, [listId, queryClient, selfId]);
+
+  return others;
 }

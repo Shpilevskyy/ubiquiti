@@ -82,18 +82,19 @@ reload persists (verified against the live Render Postgres, including client-sid
       per-tab `member` id/name/color in `sessionStorage` (`lib/member.ts`), sent as `X-Client-Id`
       on every mutation and via `list:join`, so the server can exclude the originating tab's own
       socket(s) from a broadcast and track presence (`PresenceStore`, in-memory, not persisted).
-      Deliberately scoped to protocol + cache wiring only — presence data flows end-to-end but
-      there's no presence UI (avatars/colors shown) yet; that's the rest of spec 10, as a
-      follow-up. Browser-verified with two tabs open on the same list: create/toggle/delete on
-      both todos and subtasks in one tab appear live in the other with no reload. Clean full
-      production build (`shared` + `web` + `server`).
+      Browser-verified with two tabs open on the same list: create/toggle/delete on both todos
+      and subtasks in one tab appear live in the other with no reload. Clean full production
+      build (`shared` + `web` + `server`).
+- [x] Presence indicator: `useListSocket` now also returns who else is viewing the list (from
+      `presence:update`), rendered in `ListPage` as small colored initial avatars next to the
+      title, live-updating as tabs join/leave. Deliberately minimal — no name editing or join
+      links (that's the rest of [specs/10-sharing-and-presence.md](specs/10-sharing-and-presence.md),
+      left for later if wanted). Browser-verified with two tabs: avatar appears when the second
+      tab joins and disappears when it closes.
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Redeploy/verify the SubTask UI + restyle + realtime protocol on Render once this is pushed
-- [ ] Sharing and presence UI (avatars/colors, join links) — the realtime plumbing above already
-      carries the data, this is the visual/sharing layer —
-      [specs/10-sharing-and-presence.md](specs/10-sharing-and-presence.md)
+- [ ] Redeploy/verify everything above on Render once this is pushed
 - [ ] Sync / conflict resolution — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
 - [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)

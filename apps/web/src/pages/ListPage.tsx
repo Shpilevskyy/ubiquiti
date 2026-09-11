@@ -8,7 +8,7 @@ export function ListPage() {
   const [newTodoTitle, setNewTodoTitle] = useState('');
   const [newSubTaskTitles, setNewSubTaskTitles] = useState<Record<string, string>>({});
 
-  useListSocket(listId);
+  const others = useListSocket(listId);
 
   const {
     listQuery,
@@ -58,7 +58,24 @@ export function ListPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto w-full max-w-xl rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
-        <h1 className="text-xl font-semibold text-slate-900">{list.title}</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-slate-900">{list.title}</h1>
+
+          {others.length > 0 && (
+            <div className="flex -space-x-2">
+              {others.map((member) => (
+                <span
+                  key={member.id}
+                  title={`${member.name} is viewing`}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium text-white ring-2 ring-white"
+                  style={{ backgroundColor: member.color }}
+                >
+                  {member.name[0]?.toUpperCase()}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         <ul className="mt-6 flex flex-col gap-1">
           {todos.map((todo) => (
