@@ -6,18 +6,20 @@
 
 ## Snapshot (2026-09-11)
 
-Deployed and live at **https://ubiquiti-635h.onrender.com/**, now serving the full REST API +
-Tailwind-styled UI with realtime sync, presence, and stale-write conflict detection (Render
-auto-deployed on push, no manual redeploy needed — confirmed again this session: pushed, polled
-the live API until the new `hadConflict` field appeared, ~1 minute). Prisma schema
-(List/Todo/SubTask), local Postgres via docker-compose, and a Render-managed Postgres are all in
-place; the initial migration has been applied both locally and on Render. Full REST API
-(Lists/Todos/SubTasks, per [specs/03-api-rest.md](specs/03-api-rest.md)) is implemented with a
-unified error shape. The conflict-detection toast was browser-verified directly on the live prod
-site (not just locally) by spoofing the tab's own `X-Client-Id` on an out-of-band curl PATCH to
-force a real stale-write race, confirming the toast fires on production. Leftover empty test
-lists from this verification (no list-delete endpoint exists per spec — deliberate, todos/subtasks
-are the only deletable resources) are harmless clutter with no UI path to reach them.
+Deployed and live at **https://ubiquiti-635h.onrender.com/**, serving the full REST API +
+Tailwind-styled UI with realtime sync, presence, stale-write conflict detection, a public list
+directory + deletion (cascading), and now full offline sync (outbox pattern, all 4 steps —
+connectivity detection, IndexedDB queue, optimistic mutations routed through it, flush on
+reconnect). Render auto-deploys on push, no manual redeploy needed — confirmed repeatedly this
+session by polling the live site/API after each push. Prisma schema (List/Todo/SubTask), local
+Postgres via docker-compose, and a Render-managed Postgres are all in place; migrations applied
+both locally and on Render. Full REST API (Lists/Todos/SubTasks, per
+[specs/03-api-rest.md](specs/03-api-rest.md)) is implemented with a unified error shape.
+Offline sync was verified against a real production bug: the user tested it live (two browsers,
+airplane-mode-style offline, added todos), both were silently lost on reconnect — confirming the
+exact gap already documented as "step 4 not yet built." Step 4 (this session) fixed it; re-verified
+by reproducing the same scenario locally end-to-end, including the 404 (parent-deleted-elsewhere)
+path and survival across a hard reload.
 
 ## Environment
 
@@ -171,14 +173,31 @@ are the only deletable resources) are harmless clutter with no UI path to reach 
       from a spoofed second client, applied live to the open tab) and re-ran the offline-add +
       online-toggle outbox scenarios from step 3, all unchanged. Full build clean, no console
       errors.
+- [x] Offline sync, step 4/4 (offline sync now fully implemented) — flush the outbox on
+      reconnect: `useList`'s `flushOutbox` replays queued ops for a list in FIFO order, awaiting
+      each response before the next; success dequeues, a 404 (parent deleted elsewhere) drops the
+      op and shows a toast then continues the queue, a network/5xx error stops the flush and
+      reschedules the whole thing with doubling backoff (2s → 30s cap). Triggered by
+      `connectionStatus` going online (which already aggregates both of the spec's triggers —
+      Socket.IO reconnect and the browser online event — so nothing extra needed wiring either
+      one) and once on mount, for a queue left over from a previous offline session. Also disabled
+      `refetchOnReconnect`/`refetchOnWindowFocus` on the list query — closes the gap noted in step
+      3, where TanStack's own refetch-on-reconnect could win the race and silently wipe a
+      still-queued optimistic change before the flush got to send it.
+      **Found via a real production bug report**: the user deployed step 3, went offline in two
+      separate browsers, added a todo in each, came back online, and both vanished — reproducing
+      exactly the step-3-documented gap in real usage. Confirmed against the live server (only the
+      online-created todo had persisted) before building this.
+      Browser-verified by reproducing the report directly: created a todo online, went offline,
+      added two more (appeared immediately, confirmed absent from the server), came back online —
+      both landed on the server this time, in the correct order, with no flicker/disappearance,
+      and survived a hard reload. Separately verified the 404 path: queued a subtask offline,
+      deleted its parent todo from another "client" while still offline, came back online — the
+      toast fired, the dead op was dropped (outbox left clean, not stuck retrying), and the other
+      three todos were unaffected. Full monorepo build clean, no console errors beyond the
+      expected/handled 404 from that last test.
 
 ## Next up (in rough order, mapped to specs)
-
-- [ ] Offline sync, step 4/4 — [specs/06-offline-sync.md](specs/06-offline-sync.md): flush the
-      outbox on reconnect (FIFO per list, awaiting each response; 404 drops the op + toast; 5xx/
-      network error stops the flush and retries with backoff), and disable
-      `refetchOnReconnect`/`refetchOnWindowFocus` on the list query so a refetch never clobbers a
-      not-yet-flushed optimistic change (see the gap noted in step 3, just above)
 - [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)
 - [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md)
 - [ ] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md)

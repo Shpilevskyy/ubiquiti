@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { produce } from 'immer';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GetListResponse, SubTask, Todo } from '@ubiquiti-todo/shared';
 import { api, HttpError, sendOp } from '../lib/api';
 import { connectionStatus } from '../lib/connectionStatus';
-import { dequeue, enqueue, type QueuedOp } from '../lib/outbox';
+import { dequeue, enqueue, getQueue, type QueuedOp } from '../lib/outbox';
+
+const FLUSH_RETRY_BASE_MS = 2000;
+const FLUSH_RETRY_MAX_MS = 30000;
 
 const CONFLICT_MESSAGE = 'This item was also edited elsewhere';
 const now = () => new Date().toISOString();
@@ -25,6 +28,12 @@ export function useList(listId: string | undefined) {
     // A missing list is permanent (deleted, or a bad link) — retrying it like a transient network
     // error just delays the "not found" state by several seconds of default backoff.
     retry: false,
+    // These both default to true and both fire off the *same* window online/reconnect signal
+    // flushOutbox below listens to. Left enabled, a refetch could win the race against the flush
+    // and silently overwrite a still-queued optimistic change with (stale) server truth before it
+    // ever gets sent — flushOutbox's own invalidate() is the only refetch this query should get.
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
@@ -49,9 +58,8 @@ export function useList(listId: string | undefined) {
   //  - the parent was deleted elsewhere (404): drop the op (retrying it can never succeed) and
   //    tell the user, per spec.
   //  - offline, or the send itself fails (network/5xx): leave it queued. The failed-fetch path in
-  //    api.ts already flips the connectivity signal; flushing this queue on reconnect is step 4,
-  //    not yet built — so a page reload before that lands will refetch from the server and not
-  //    show still-queued optimistic changes, even though they're safely persisted in the outbox.
+  //    api.ts already flips the connectivity signal; flushOutbox below is what eventually sends
+  //    this once we're back online.
   async function mutateWithOutbox<T>(
     op: Pick<QueuedOp, 'method' | 'path' | 'body'>,
     applyOptimistic: (old: GetListResponse | undefined) => GetListResponse | undefined,
@@ -78,6 +86,62 @@ export function useList(listId: string | undefined) {
       return { sent: false };
     }
   }
+
+  // Flushing the outbox (specs/06-offline-sync.md): replay queued ops for this list in FIFO
+  // order, awaiting each response before sending the next (preserves the order they were made
+  // in, and means a create always lands before a PATCH/DELETE that depends on it). Triggered by
+  // connectionStatus going online — which already aggregates both of the spec's two triggers
+  // (Socket.IO connect/reconnect and the browser online event), so this hook doesn't need to
+  // wire either one separately — and once on mount, in case a previous offline session left
+  // ops queued and the tab was reopened already online.
+  const flushRetryDelayRef = useRef(FLUSH_RETRY_BASE_MS);
+  const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  async function flushOutbox() {
+    if (!listId || connectionStatus.getStatus() !== 'online') return;
+
+    let sentAny = false;
+    while (true) {
+      const [op] = await getQueue(listId);
+      if (!op) break;
+
+      try {
+        await sendOp(op);
+        await dequeue(listId, op.opId);
+        sentAny = true;
+      } catch (err) {
+        if (err instanceof HttpError && err.status === 404) {
+          await dequeue(listId, op.opId);
+          showNotice('This item no longer exists');
+          continue;
+        }
+        // Network error / 5xx: stop here, leave the rest queued, retry the whole flush later
+        // with backoff rather than looping tightly against a server/connection that's down.
+        flushTimeoutRef.current = setTimeout(flushOutbox, flushRetryDelayRef.current);
+        flushRetryDelayRef.current = Math.min(flushRetryDelayRef.current * 2, FLUSH_RETRY_MAX_MS);
+        if (sentAny) invalidate();
+        return;
+      }
+    }
+
+    flushRetryDelayRef.current = FLUSH_RETRY_BASE_MS;
+    if (sentAny) invalidate();
+  }
+
+  useEffect(() => {
+    if (!listId) return;
+    flushOutbox();
+    const unsubscribe = connectionStatus.subscribe(() => {
+      if (connectionStatus.getStatus() === 'online') flushOutbox();
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(flushTimeoutRef.current);
+    };
+    // Deliberately keyed on listId alone: flushOutbox always reads listId/getStatus() fresh
+    // (they're not stale-closure-sensitive here), and re-keying on it would tear down and
+    // re-subscribe on every render instead of just when the list actually changes.
+  }, [listId]);
 
   // TanStack Query has its own network-awareness — by default (networkMode: 'online') it pauses
   // a mutation and never calls mutationFn at all while it believes the browser is offline
