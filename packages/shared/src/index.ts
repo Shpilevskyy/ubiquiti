@@ -73,6 +73,22 @@ export const UpdateTodoBodySchema = z.object({
 });
 export type UpdateTodoBody = z.infer<typeof UpdateTodoBodySchema>;
 
+export const CreateSubTaskBodySchema = z.object({
+  id: z.uuid(),
+  title: z.string().min(1),
+  position: z.number(),
+  costCents: z.number().int().nullable().optional(),
+});
+export type CreateSubTaskBody = z.infer<typeof CreateSubTaskBodySchema>;
+
+export const UpdateSubTaskBodySchema = z.object({
+  title: z.string().min(1).optional(),
+  done: z.boolean().optional(),
+  position: z.number().optional(),
+  costCents: z.number().int().nullable().optional(),
+});
+export type UpdateSubTaskBody = z.infer<typeof UpdateSubTaskBodySchema>;
+
 export interface GetListResponse {
   list: List;
   todos: Todo[];

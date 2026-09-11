@@ -6,12 +6,19 @@ import { Server as SocketIOServer } from 'socket.io';
 import { SOCKET_EVENTS, type HelloResponse } from '@ubiquiti-todo/shared';
 import { listsRoutes } from './routes/lists.js';
 import { todosRoutes } from './routes/todos.js';
+import { subtasksRoutes } from './routes/subtasks.js';
+import { registerErrorHandling } from './errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webDist = path.resolve(__dirname, '../../web/dist');
 const isProduction = process.env.NODE_ENV === 'production';
 
 const app = Fastify({ logger: true });
+
+// Must run before any routes are registered: Fastify bakes the current error/not-found
+// handlers into each route's context at registration time, so routes added earlier would
+// otherwise keep the default handlers instead of ours.
+registerErrorHandling(app, { isProduction });
 
 app.get('/healthz', async () => 'ok');
 
@@ -22,18 +29,12 @@ app.get('/api/hello', async (): Promise<HelloResponse> => ({
 
 await app.register(listsRoutes);
 await app.register(todosRoutes);
+await app.register(subtasksRoutes);
 
 if (isProduction) {
   await app.register(fastifyStatic, {
     root: webDist,
     wildcard: false,
-  });
-
-  app.setNotFoundHandler(async (request, reply) => {
-    if (request.raw.method === 'GET' && !request.url.startsWith('/api')) {
-      return reply.sendFile('index.html');
-    }
-    return reply.code(404).send({ error: { code: 'not_found', message: 'Not found' } });
   });
 }
 

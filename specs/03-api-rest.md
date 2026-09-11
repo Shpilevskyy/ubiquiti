@@ -55,6 +55,19 @@ Standard HTTP status codes (400 validation, 404 not found, 409 reserved but unus
 [05-sync-conflict-resolution.md](05-sync-conflict-resolution.md) for why we don't reject
 conflicting writes, 500 unexpected).
 
+This shape is enforced globally by a single `app.setErrorHandler`/`setNotFoundHandler` pair
+(`apps/server/src/errorHandler.ts`) — not just per-route try/catch — so it also covers cases that
+never reach a route handler, like malformed JSON bodies (Fastify's own content-type parser error)
+or unmatched routes. Zod's `safeParse` never throws, so route handlers still return `invalid_body`
+manually for schema mismatches; the global handler's `bad_request` code is the catch-all for
+everything else, and `internal_error` for anything 5xx (logged server-side, not leaked to the
+client).
+
+Gotcha: Fastify bakes the current error/not-found handler into each route's context **at the time
+the route is registered** — it does not apply retroactively. `registerErrorHandling` must run
+before `app.register(listsRoutes)` etc., or routes registered earlier silently keep Fastify's
+default (differently-shaped) error responses.
+
 ## Reordering
 
 There is no dedicated batch-reorder endpoint. Moving one item only ever changes that item's
