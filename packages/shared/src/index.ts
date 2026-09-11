@@ -80,6 +80,9 @@ export const UpdateTodoBodySchema = z.object({
   position: z.number().optional(),
   costCents: z.number().int().nullable().optional(),
   descriptionMd: z.string().nullable().optional(),
+  // The `version` the client last saw for this row — see specs/05-sync-conflict-resolution.md.
+  // Omitting it just skips the conflict check; the write still applies either way.
+  baseVersion: z.number().int().optional(),
 });
 export type UpdateTodoBody = z.infer<typeof UpdateTodoBodySchema>;
 
@@ -96,6 +99,8 @@ export const UpdateSubTaskBodySchema = z.object({
   done: z.boolean().optional(),
   position: z.number().optional(),
   costCents: z.number().int().nullable().optional(),
+  // See UpdateTodoBodySchema.baseVersion above.
+  baseVersion: z.number().int().optional(),
 });
 export type UpdateSubTaskBody = z.infer<typeof UpdateSubTaskBodySchema>;
 

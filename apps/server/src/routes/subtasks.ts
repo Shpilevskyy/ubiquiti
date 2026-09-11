@@ -60,10 +60,21 @@ export async function subtasksRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
       }
 
+      const { baseVersion, ...updateData } = body.data;
+
       try {
+        const current = await prisma.subTask.findUnique({
+          where: { id: request.params.subtaskId },
+          select: { version: true },
+        });
+        if (!current) {
+          return reply.code(404).send({ error: { code: 'not_found', message: 'SubTask not found' } });
+        }
+        const hadConflict = baseVersion !== undefined && current.version > baseVersion;
+
         const subtask = await prisma.subTask.update({
           where: { id: request.params.subtaskId },
-          data: { ...body.data, version: { increment: 1 } },
+          data: { ...updateData, version: { increment: 1 } },
         });
         const serialized = serializeSubTask(subtask);
         const payload: SubTaskUpdatedPayload = { todoId: request.params.todoId, subtask: serialized };
@@ -73,7 +84,7 @@ export async function subtasksRoutes(app: FastifyInstance) {
           SOCKET_EVENTS.SUBTASK_UPDATED,
           payload,
         );
-        return { subtask: serialized };
+        return { subtask: serialized, hadConflict };
       } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
           return reply.code(404).send({ error: { code: 'not_found', message: 'SubTask not found' } });

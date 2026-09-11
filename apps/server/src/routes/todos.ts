@@ -59,10 +59,21 @@ export async function todosRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
       }
 
+      const { baseVersion, ...updateData } = body.data;
+
       try {
+        const current = await prisma.todo.findUnique({
+          where: { id: request.params.todoId },
+          select: { version: true },
+        });
+        if (!current) {
+          return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
+        }
+        const hadConflict = baseVersion !== undefined && current.version > baseVersion;
+
         const todo = await prisma.todo.update({
           where: { id: request.params.todoId },
-          data: { ...body.data, version: { increment: 1 } },
+          data: { ...updateData, version: { increment: 1 } },
           include: { subtasks: true },
         });
         const serialized = serializeTodo(todo);
@@ -72,7 +83,7 @@ export async function todosRoutes(app: FastifyInstance) {
           SOCKET_EVENTS.TODO_UPDATED,
           { todo: serialized },
         );
-        return { todo: serialized };
+        return { todo: serialized, hadConflict };
       } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
           return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
