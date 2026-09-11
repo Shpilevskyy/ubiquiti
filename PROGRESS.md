@@ -62,10 +62,17 @@ reload persists (verified against the live Render Postgres, including client-sid
 - [x] SubTask UI: add/toggle/delete subtasks nested under each todo, mirroring the Todo UI pattern
       (`createSubTask`/`toggleSubTask`/`deleteSubTask` added to `useList`, per-todo new-subtask
       input state in `ListPage`). Browser-verified locally, including persistence across reload.
+- [x] Tailwind CSS wired in (`@tailwindcss/vite` plugin + `src/index.css` with
+      `@import "tailwindcss"`), per [specs/01-architecture.md](specs/01-architecture.md) — setup
+      only, no restyle yet. `src/vite-env.d.ts` added (was missing) so `tsc` recognizes the CSS
+      side-effect import; verified with a clean `npm run build` and no visual/console regressions
+      on the still-unstyled pages.
 
 ## Next up (in rough order, mapped to specs)
 
 - [ ] Redeploy/verify the SubTask UI on Render once this is pushed
+- [ ] Restyle `LandingPage`/`ListPage` with Tailwind utility classes (replace the inline `style={}`
+      props) now that the Tailwind pipeline is wired in
 - [ ] Realtime protocol (Socket.IO events) — [specs/04-realtime-protocol.md](specs/04-realtime-protocol.md)
 - [ ] Sync / conflict resolution — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
