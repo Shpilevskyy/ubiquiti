@@ -7,6 +7,16 @@ export interface HelloResponse {
 
 export const SOCKET_EVENTS = {
   HELLO: 'hello',
+  LIST_JOIN: 'list:join',
+  LIST_LEAVE: 'list:leave',
+  LIST_UPDATED: 'list:updated',
+  TODO_CREATED: 'todo:created',
+  TODO_UPDATED: 'todo:updated',
+  TODO_DELETED: 'todo:deleted',
+  SUBTASK_CREATED: 'subtask:created',
+  SUBTASK_UPDATED: 'subtask:updated',
+  SUBTASK_DELETED: 'subtask:deleted',
+  PRESENCE_UPDATE: 'presence:update',
 } as const;
 
 export const ListSchema = z.object({
@@ -92,6 +102,43 @@ export type UpdateSubTaskBody = z.infer<typeof UpdateSubTaskBodySchema>;
 export interface GetListResponse {
   list: List;
   todos: Todo[];
+}
+
+// The header a client sends on every mutation request so the server can exclude that client's
+// socket(s) from the realtime broadcast for that mutation — see specs/04-realtime-protocol.md.
+export const CLIENT_ID_HEADER = 'x-client-id';
+
+export const MemberSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string(),
+});
+export type Member = z.infer<typeof MemberSchema>;
+
+export interface ListJoinPayload {
+  listId: string;
+  member: Member;
+}
+export interface ListLeavePayload {
+  listId: string;
+}
+export interface PresenceUpdatePayload {
+  members: Member[];
+}
+export interface TodoDeletedPayload {
+  todoId: string;
+}
+export interface SubTaskCreatedPayload {
+  todoId: string;
+  subtask: SubTask;
+}
+export interface SubTaskUpdatedPayload {
+  todoId: string;
+  subtask: SubTask;
+}
+export interface SubTaskDeletedPayload {
+  todoId: string;
+  subtaskId: string;
 }
 
 export const ErrorResponseSchema = z.object({

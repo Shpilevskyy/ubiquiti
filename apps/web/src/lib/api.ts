@@ -1,21 +1,27 @@
-import type {
-  CreateListBody,
-  CreateSubTaskBody,
-  CreateTodoBody,
-  ErrorResponse,
-  GetListResponse,
-  List,
-  SubTask,
-  Todo,
-  UpdateListBody,
-  UpdateSubTaskBody,
-  UpdateTodoBody,
+import {
+  CLIENT_ID_HEADER,
+  type CreateListBody,
+  type CreateSubTaskBody,
+  type CreateTodoBody,
+  type ErrorResponse,
+  type GetListResponse,
+  type List,
+  type SubTask,
+  type Todo,
+  type UpdateListBody,
+  type UpdateSubTaskBody,
+  type UpdateTodoBody,
 } from '@ubiquiti-todo/shared';
+import { getMember } from './member';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...init,
-    headers: init?.body ? { 'Content-Type': 'application/json', ...init.headers } : init?.headers,
+    headers: {
+      [CLIENT_ID_HEADER]: getMember().id,
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init?.headers,
+    },
   });
 
   if (!res.ok) {

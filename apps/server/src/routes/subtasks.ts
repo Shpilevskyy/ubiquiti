@@ -1,6 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
-import { CreateSubTaskBodySchema, UpdateSubTaskBodySchema } from '@ubiquiti-todo/shared';
+import {
+  CLIENT_ID_HEADER,
+  CreateSubTaskBodySchema,
+  SOCKET_EVENTS,
+  UpdateSubTaskBodySchema,
+  type SubTaskCreatedPayload,
+  type SubTaskDeletedPayload,
+  type SubTaskUpdatedPayload,
+} from '@ubiquiti-todo/shared';
 import { prisma } from '../prisma.js';
 import { serializeSubTask } from '../serializers.js';
 
@@ -32,7 +40,15 @@ export async function subtasksRoutes(app: FastifyInstance) {
           costCents: body.data.costCents ?? null,
         },
       });
-      return { subtask: serializeSubTask(subtask) };
+      const serialized = serializeSubTask(subtask);
+      const payload: SubTaskCreatedPayload = { todoId: request.params.todoId, subtask: serialized };
+      app.broadcaster.broadcastToList(
+        request.params.listId,
+        request.headers[CLIENT_ID_HEADER] as string | undefined,
+        SOCKET_EVENTS.SUBTASK_CREATED,
+        payload,
+      );
+      return { subtask: serialized };
     },
   );
 
@@ -49,7 +65,15 @@ export async function subtasksRoutes(app: FastifyInstance) {
           where: { id: request.params.subtaskId },
           data: { ...body.data, version: { increment: 1 } },
         });
-        return { subtask: serializeSubTask(subtask) };
+        const serialized = serializeSubTask(subtask);
+        const payload: SubTaskUpdatedPayload = { todoId: request.params.todoId, subtask: serialized };
+        app.broadcaster.broadcastToList(
+          request.params.listId,
+          request.headers[CLIENT_ID_HEADER] as string | undefined,
+          SOCKET_EVENTS.SUBTASK_UPDATED,
+          payload,
+        );
+        return { subtask: serialized };
       } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
           return reply.code(404).send({ error: { code: 'not_found', message: 'SubTask not found' } });
@@ -63,6 +87,16 @@ export async function subtasksRoutes(app: FastifyInstance) {
     '/api/lists/:listId/todos/:todoId/subtasks/:subtaskId',
     async (request, reply) => {
       await prisma.subTask.deleteMany({ where: { id: request.params.subtaskId } });
+      const payload: SubTaskDeletedPayload = {
+        todoId: request.params.todoId,
+        subtaskId: request.params.subtaskId,
+      };
+      app.broadcaster.broadcastToList(
+        request.params.listId,
+        request.headers[CLIENT_ID_HEADER] as string | undefined,
+        SOCKET_EVENTS.SUBTASK_DELETED,
+        payload,
+      );
       return reply.code(204).send();
     },
   );

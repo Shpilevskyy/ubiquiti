@@ -1,11 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { useList } from '../hooks/useList';
+import { useListSocket } from '../hooks/useListSocket';
 
 export function ListPage() {
   const { listId } = useParams<{ listId: string }>();
   const [newTodoTitle, setNewTodoTitle] = useState('');
   const [newSubTaskTitles, setNewSubTaskTitles] = useState<Record<string, string>>({});
+
+  useListSocket(listId);
 
   const {
     listQuery,

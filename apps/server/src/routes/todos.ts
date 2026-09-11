@@ -1,6 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
-import { CreateTodoBodySchema, UpdateTodoBodySchema } from '@ubiquiti-todo/shared';
+import {
+  CLIENT_ID_HEADER,
+  CreateTodoBodySchema,
+  SOCKET_EVENTS,
+  UpdateTodoBodySchema,
+  type TodoDeletedPayload,
+} from '@ubiquiti-todo/shared';
 import { prisma } from '../prisma.js';
 import { serializeTodo } from '../serializers.js';
 
@@ -35,7 +41,14 @@ export async function todosRoutes(app: FastifyInstance) {
       },
       include: { subtasks: true },
     });
-    return { todo: serializeTodo(todo) };
+    const serialized = serializeTodo(todo);
+    app.broadcaster.broadcastToList(
+      request.params.listId,
+      request.headers[CLIENT_ID_HEADER] as string | undefined,
+      SOCKET_EVENTS.TODO_CREATED,
+      { todo: serialized },
+    );
+    return { todo: serialized };
   });
 
   app.patch<{ Params: { listId: string; todoId: string } }>(
@@ -52,7 +65,14 @@ export async function todosRoutes(app: FastifyInstance) {
           data: { ...body.data, version: { increment: 1 } },
           include: { subtasks: true },
         });
-        return { todo: serializeTodo(todo) };
+        const serialized = serializeTodo(todo);
+        app.broadcaster.broadcastToList(
+          request.params.listId,
+          request.headers[CLIENT_ID_HEADER] as string | undefined,
+          SOCKET_EVENTS.TODO_UPDATED,
+          { todo: serialized },
+        );
+        return { todo: serialized };
       } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
           return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
@@ -66,6 +86,13 @@ export async function todosRoutes(app: FastifyInstance) {
     '/api/lists/:listId/todos/:todoId',
     async (request, reply) => {
       await prisma.todo.deleteMany({ where: { id: request.params.todoId } });
+      const payload: TodoDeletedPayload = { todoId: request.params.todoId };
+      app.broadcaster.broadcastToList(
+        request.params.listId,
+        request.headers[CLIENT_ID_HEADER] as string | undefined,
+        SOCKET_EVENTS.TODO_DELETED,
+        payload,
+      );
       return reply.code(204).send();
     },
   );

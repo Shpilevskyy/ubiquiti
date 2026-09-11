@@ -1,6 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
-import { CreateListBodySchema, UpdateListBodySchema, type GetListResponse } from '@ubiquiti-todo/shared';
+import {
+  CLIENT_ID_HEADER,
+  CreateListBodySchema,
+  SOCKET_EVENTS,
+  UpdateListBodySchema,
+  type GetListResponse,
+} from '@ubiquiti-todo/shared';
 import { prisma } from '../prisma.js';
 import { serializeList, serializeTodo } from '../serializers.js';
 
@@ -43,7 +49,14 @@ export async function listsRoutes(app: FastifyInstance) {
         where: { id: request.params.listId },
         data: body.data,
       });
-      return { list: serializeList(list) };
+      const serialized = serializeList(list);
+      app.broadcaster.broadcastToList(
+        list.id,
+        request.headers[CLIENT_ID_HEADER] as string | undefined,
+        SOCKET_EVENTS.LIST_UPDATED,
+        { list: serialized },
+      );
+      return { list: serialized };
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
         return reply.code(404).send({ error: { code: 'not_found', message: 'List not found' } });

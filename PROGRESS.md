@@ -73,17 +73,32 @@ reload persists (verified against the live Render Postgres, including client-sid
       [specs/01-architecture.md](specs/01-architecture.md)'s rationale), hover-revealed Delete
       buttons, indented subtasks with a left border. Browser-verified locally end-to-end
       (create/toggle/delete todo + subtask) with a clean production build.
+- [x] Realtime protocol — [specs/04-realtime-protocol.md](specs/04-realtime-protocol.md): REST
+      mutations broadcast `list:updated`/`todo:*`/`subtask:*` to the list's Socket.IO room
+      (`app.broadcaster.broadcastToList`, wired via `app.decorate('broadcaster', ...)` in
+      `index.ts` so routes can reach it), a `useListSocket` hook applies them to the TanStack
+      Query cache directly (no refetch) for other tabs. Includes the piece of
+      [specs/10-sharing-and-presence.md](specs/10-sharing-and-presence.md) this depends on: a
+      per-tab `member` id/name/color in `sessionStorage` (`lib/member.ts`), sent as `X-Client-Id`
+      on every mutation and via `list:join`, so the server can exclude the originating tab's own
+      socket(s) from a broadcast and track presence (`PresenceStore`, in-memory, not persisted).
+      Deliberately scoped to protocol + cache wiring only — presence data flows end-to-end but
+      there's no presence UI (avatars/colors shown) yet; that's the rest of spec 10, as a
+      follow-up. Browser-verified with two tabs open on the same list: create/toggle/delete on
+      both todos and subtasks in one tab appear live in the other with no reload. Clean full
+      production build (`shared` + `web` + `server`).
 
 ## Next up (in rough order, mapped to specs)
 
-- [ ] Redeploy/verify the SubTask UI + restyle on Render once this is pushed
-- [ ] Realtime protocol (Socket.IO events) — [specs/04-realtime-protocol.md](specs/04-realtime-protocol.md)
+- [ ] Redeploy/verify the SubTask UI + restyle + realtime protocol on Render once this is pushed
+- [ ] Sharing and presence UI (avatars/colors, join links) — the realtime plumbing above already
+      carries the data, this is the visual/sharing layer —
+      [specs/10-sharing-and-presence.md](specs/10-sharing-and-presence.md)
 - [ ] Sync / conflict resolution — [specs/05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
 - [ ] Offline sync — [specs/06-offline-sync.md](specs/06-offline-sync.md)
 - [ ] Frontend architecture — [specs/07-frontend-architecture.md](specs/07-frontend-architecture.md)
 - [ ] Drag and drop — [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md)
 - [ ] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md)
-- [ ] Sharing and presence — [specs/10-sharing-and-presence.md](specs/10-sharing-and-presence.md)
 - [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)
 - [ ] Make repo private after reviewer has seen it
 
