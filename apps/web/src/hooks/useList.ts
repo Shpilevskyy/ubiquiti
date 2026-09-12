@@ -218,6 +218,39 @@ export function useList(listId: string | undefined) {
     },
   });
 
+  // Markdown descriptions (specs/09-markdown-descriptions.md): same PATCH/outbox/conflict path
+  // as toggleTodo, just a different field. The "don't yank text mid-edit" behavior it also
+  // requires needs no extra wiring here — TodoDescription only reads descriptionMd from the
+  // cache when *entering* edit mode, so a realtime update landing mid-edit is invisible to the
+  // open textarea and only shows up (via the normal prop) once the user exits edit mode.
+  const updateTodoDescription = useMutation({
+    ...OFFLINE_AWARE,
+    mutationFn: ({
+      todoId,
+      descriptionMd,
+      baseVersion,
+    }: {
+      todoId: string;
+      descriptionMd: string;
+      baseVersion: number;
+    }) =>
+      mutateWithOutbox<{ hadConflict: boolean }>(
+        { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { descriptionMd, baseVersion } },
+        (old) =>
+          old &&
+          produce(old, (draft) => {
+            const todo = draft.todos.find((t) => t.id === todoId);
+            if (todo) {
+              todo.descriptionMd = descriptionMd;
+              todo.updatedAt = now();
+            }
+          }),
+      ),
+    onSuccess: (result) => {
+      if (result.sent) noteConflict(result.response.hadConflict);
+    },
+  });
+
   const deleteTodo = useMutation({
     ...OFFLINE_AWARE,
     mutationFn: (todoId: string) =>
@@ -360,6 +393,7 @@ export function useList(listId: string | undefined) {
     listQuery,
     createTodo,
     toggleTodo,
+    updateTodoDescription,
     deleteTodo,
     reorderTodo,
     createSubTask,

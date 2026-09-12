@@ -17,6 +17,7 @@ export function ListPage() {
     listQuery,
     createTodo,
     toggleTodo,
+    updateTodoDescription,
     deleteTodo,
     reorderTodo,
     createSubTask,
@@ -107,6 +108,9 @@ export function ListPage() {
         <TodoList
           todos={todos}
           onToggleTodo={(todoId, done, baseVersion) => toggleTodo.mutate({ todoId, done, baseVersion })}
+          onUpdateTodoDescription={(todoId, descriptionMd, baseVersion) =>
+            updateTodoDescription.mutate({ todoId, descriptionMd, baseVersion })
+          }
           onDeleteTodo={(todoId) => deleteTodo.mutate(todoId)}
           onReorderTodo={(todoId, position) => reorderTodo.mutate({ todoId, position })}
           onToggleSubTask={(todoId, subtaskId, done, baseVersion) =>

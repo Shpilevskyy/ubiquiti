@@ -268,8 +268,40 @@ reproducing the exact failure mode before and after.
       `orderBy` fix, not just the optimistic client state). Checked console on a fresh tab — clean,
       no errors. Clean full build.
 
+- [x] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md):
+      `descriptionMd` was already on the Todo model/shared schemas/generic PATCH route from earlier
+      work, so this was UI-only. Added `react-markdown` + `remark-gfm` (per the spec's library
+      boundary — rendering only, no `rehype-raw`, so raw HTML input renders as literal escaped
+      text rather than executing, verified by pasting an `<img onerror=...>` payload and
+      confirming no `<img>` element was created). New `TodoDescription` component under each Todo:
+      view mode renders markdown (muted "Add a description…" placeholder when empty), click enters
+      edit mode (auto-growing `<textarea>`), saves on blur or Cmd/Ctrl+Enter, `Escape` discards and
+      reverts with no PATCH sent. New `updateTodoDescription` mutation in `useList` mirrors
+      `toggleTodo` exactly — same `mutateWithOutbox`/`baseVersion`/conflict-toast path, so
+      descriptions are offline-safe and realtime-broadcast like every other field. The "don't yank
+      text mid-edit" requirement needed no bespoke reconciliation logic: `TodoDescription` only
+      reads `descriptionMd` from the cache when *entering* edit mode (not continuously), and view
+      mode always renders the live prop directly — so a realtime update mid-edit updates the cache
+      normally (existing `useListSocket` `TODO_UPDATED` handler, unchanged) but the open textarea
+      is untouched, and the latest value appears as soon as the user exits edit mode either way.
+      Markdown elements are unstyled by Tailwind's default utilities (no `@tailwindcss/typography`
+      plugin added — out of scope for this task); a small set of `[&_selector]` arbitrary-variant
+      overrides on the view wrapper gives lists/links/code/headings/blockquotes minimal readable
+      styling instead.
+      **Bug found via user testing, fixed same session**: the first pass only covered
+      `p`/`ul`/`ol`/`a`/`code` — headings (`# `/`## `) rendered as flat, unstyled text because
+      Tailwind's Preflight resets `h1`–`h6` `font-size`/`font-weight` to `inherit`. User tested
+      live in their own browser (a real todo titled "# Repo rules for Claude" with a `## Test`
+      section, synced to this session's tab via the existing realtime broadcast) and flagged
+      headings not standing out. Fixed by adding bold+size overrides for `h1`/`h2` and
+      `h3`–`h6`, plus a blockquote style. Re-verified against that same live todo.
+      Browser-verified end-to-end: added a todo, entered edit mode by clicking the placeholder,
+      typed heading/bold/link/list markdown, saved on blur, confirmed it rendered correctly and
+      persisted across a hard reload; re-entered edit mode via click, typed more text, `Escape`
+      discarded it (confirmed via no new PATCH network request and unchanged rendered content).
+      Clean full build.
+
 ## Next up (in rough order, mapped to specs)
-- [ ] Markdown descriptions — [specs/09-markdown-descriptions.md](specs/09-markdown-descriptions.md)
 - [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)
 - [ ] Make repo private after reviewer has seen it
 

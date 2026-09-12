@@ -13,11 +13,13 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Todo } from '@ubiquiti-todo/shared';
 import { computeReorderPosition } from '../lib/position';
 import { SubtaskItem } from './SubtaskItem';
+import { TodoDescription } from './TodoDescription';
 
 interface TodoItemProps {
   todo: Todo;
   onToggle: () => void;
   onDelete: () => void;
+  onUpdateDescription: (descriptionMd: string) => void;
   onToggleSubTask: (subtaskId: string, done: boolean, baseVersion: number) => void;
   onDeleteSubTask: (subtaskId: string) => void;
   onReorderSubTask: (subtaskId: string, position: number) => void;
@@ -30,6 +32,7 @@ export function TodoItem({
   todo,
   onToggle,
   onDelete,
+  onUpdateDescription,
   onToggleSubTask,
   onDeleteSubTask,
   onReorderSubTask,
@@ -80,6 +83,10 @@ export function TodoItem({
         >
           Delete
         </button>
+      </div>
+
+      <div className="ml-7 pl-4">
+        <TodoDescription descriptionMd={todo.descriptionMd} onSave={onUpdateDescription} />
       </div>
 
       <DndContext sensors={subtaskSensors} collisionDetection={closestCenter} onDragEnd={handleSubTaskDragEnd}>
