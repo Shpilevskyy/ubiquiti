@@ -1,12 +1,6 @@
 import { z } from 'zod';
 
-export interface HelloResponse {
-  message: string;
-  timestamp: string;
-}
-
 export const SOCKET_EVENTS = {
-  HELLO: 'hello',
   LIST_JOIN: 'list:join',
   LIST_LEAVE: 'list:leave',
   LIST_UPDATED: 'list:updated',

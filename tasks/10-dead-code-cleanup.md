@@ -1,6 +1,8 @@
 # 10 — Delete unreachable API helpers, hello scaffold, stale comments
 
-**Status:** not started
+**Status:** done — dead code, hello scaffold, and stale comments (the mechanical parts). The
+comment-volume calibration pass is deliberately left for its own separate diff, per this file's own
+"do it as its own pass so the diff is reviewable" note.
 **Size:** S
 **Depends on:** —
 **Source:** Staff review 2026-09-12

@@ -636,6 +636,30 @@ reproducing the exact failure mode before and after.
       double-delete; unknown route) plus re-running `scripts/verify-conflict.py`'s 10 assertions
       against a freshly built server instance — all pass unchanged. Clean full build.
 
+- [x] Dead code cleanup — [tasks/10-dead-code-cleanup.md](tasks/10-dead-code-cleanup.md), mechanical
+      parts only (the comment-volume calibration pass is deliberately deferred to its own diff, per
+      the task's own note that it needs to be reviewable separately).
+      **Unreachable `api.ts` helpers removed**: `updateList`, `createTodo`, `updateTodo`,
+      `deleteTodo`, `createSubTask`, `updateSubTask`, `deleteSubTask` — all mutations go through the
+      outbox's `sendOp` instead (confirmed via grep: zero call sites outside the file). `api.ts` now
+      only has the four list-level operations that genuinely bypass the outbox (List has no
+      `version` column, sits outside the conflict/outbox model). `UpdateListBody`/`CreateTodoBody`/
+      etc. imports dropped since nothing in `apps/web` referenced those types once the dead
+      functions were gone (the server still uses the schemas directly).
+      **Hello-world scaffold removed**: `HelloResponse` and `SOCKET_EVENTS.HELLO` from
+      `packages/shared`, `GET /api/hello` from `index.ts`, and the `socket.emit(HELLO, ...)` on
+      connect from `socket.ts` — confirmed via grep that nothing in `apps/web` consumed any of it.
+      **Stale comment fixed**: `outbox.ts`'s `QueuedOp.path` field comment illustrated a path with
+      an `/api` prefix the code never actually stores (confirmed against `useList.ts`'s
+      `/lists/${listId}/todos` and `api.ts`'s own correct comment on `sendOp`). The other stale
+      comment this task flagged ("not wired into any mutation flow yet") had already been corrected
+      by an earlier task.
+      **Verified**: clean full build (anything still referenced would fail to compile, per the
+      task's own verification note); smoke-tested in-browser since removing the socket `hello` emit
+      touches the connection path — list loads, presence/realtime unaffected, and a todo toggle
+      still applies live via the socket, confirming the connection handshake works without it.
+      `curl /api/hello` now 404s in the unified error shape.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

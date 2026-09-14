@@ -23,10 +23,6 @@ export function registerSocketHandlers(io: SocketIOServer, log: FastifyBaseLogge
 
   io.on('connection', (socket) => {
     log.info(`socket connected: ${socket.id}`);
-    socket.emit(SOCKET_EVENTS.HELLO, {
-      message: 'Hello over WebSocket 👋',
-      timestamp: new Date().toISOString(),
-    });
 
     socket.on(SOCKET_EVENTS.LIST_JOIN, (payload: ListJoinPayload) => {
       const member = MemberSchema.safeParse(payload?.member);

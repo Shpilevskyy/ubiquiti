@@ -1,17 +1,10 @@
 import {
   CLIENT_ID_HEADER,
   type CreateListBody,
-  type CreateSubTaskBody,
-  type CreateTodoBody,
   type ErrorResponse,
   type GetListResponse,
   type GetListsResponse,
   type List,
-  type SubTask,
-  type Todo,
-  type UpdateListBody,
-  type UpdateSubTaskBody,
-  type UpdateTodoBody,
 } from '@ubiquiti-todo/shared';
 import { connectionStatus } from './connectionStatus';
 import { getMember } from './member';
@@ -69,6 +62,9 @@ export function sendOp<T>(op: { method: 'POST' | 'PATCH' | 'DELETE'; path: strin
   });
 }
 
+// Todo/SubTask create/update/delete all go through the outbox (sendOp above) instead — these are
+// only the list-level operations that don't, since List has no version column and sits outside
+// the conflict/outbox model entirely (see useList.ts).
 export const api = {
   createList: (body: CreateListBody) =>
     request<{ list: List }>('/lists', { method: 'POST', body: JSON.stringify(body) }),
@@ -77,37 +73,5 @@ export const api = {
 
   getList: (listId: string) => request<GetListResponse>(`/lists/${listId}`),
 
-  updateList: (listId: string, body: UpdateListBody) =>
-    request<{ list: List }>(`/lists/${listId}`, { method: 'PATCH', body: JSON.stringify(body) }),
-
   deleteList: (listId: string) => request<void>(`/lists/${listId}`, { method: 'DELETE' }),
-
-  createTodo: (listId: string, body: CreateTodoBody) =>
-    request<{ todo: Todo }>(`/lists/${listId}/todos`, { method: 'POST', body: JSON.stringify(body) }),
-
-  updateTodo: (listId: string, todoId: string, body: UpdateTodoBody) =>
-    request<{ todo: Todo; hadConflict: boolean }>(`/lists/${listId}/todos/${todoId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    }),
-
-  deleteTodo: (listId: string, todoId: string) =>
-    request<void>(`/lists/${listId}/todos/${todoId}`, { method: 'DELETE' }),
-
-  createSubTask: (listId: string, todoId: string, body: CreateSubTaskBody) =>
-    request<{ subtask: SubTask }>(`/lists/${listId}/todos/${todoId}/subtasks`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
-
-  updateSubTask: (listId: string, todoId: string, subtaskId: string, body: UpdateSubTaskBody) =>
-    request<{ subtask: SubTask; hadConflict: boolean }>(
-      `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`,
-      { method: 'PATCH', body: JSON.stringify(body) },
-    ),
-
-  deleteSubTask: (listId: string, todoId: string, subtaskId: string) =>
-    request<void>(`/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, {
-      method: 'DELETE',
-    }),
 };

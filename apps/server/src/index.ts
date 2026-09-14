@@ -4,7 +4,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { Server as SocketIOServer } from 'socket.io';
-import { CLIENT_ID_HEADER, type HelloResponse } from '@ubiquiti-todo/shared';
+import { CLIENT_ID_HEADER } from '@ubiquiti-todo/shared';
 import { listsRoutes } from './routes/lists.js';
 import { todosRoutes } from './routes/todos.js';
 import { subtasksRoutes } from './routes/subtasks.js';
@@ -45,11 +45,6 @@ const io = new SocketIOServer(app.server, {
 app.decorate('broadcaster', registerSocketHandlers(io, app.log));
 
 app.get('/healthz', async () => 'ok');
-
-app.get('/api/hello', async (): Promise<HelloResponse> => ({
-  message: 'Hello from the server 👋',
-  timestamp: new Date().toISOString(),
-}));
 
 await app.register(listsRoutes);
 await app.register(todosRoutes);

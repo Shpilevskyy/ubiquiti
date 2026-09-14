@@ -6,7 +6,7 @@ import { get, update } from 'idb-keyval';
 export interface QueuedOp {
   opId: string; // uuid, for local dedupe/logging only — REST idempotency is via the todo/subtask id
   method: 'POST' | 'PATCH' | 'DELETE';
-  path: string; // e.g. /api/lists/:listId/todos/:todoId
+  path: string; // e.g. /lists/:listId/todos/:todoId — no /api prefix, see api.ts's sendOp
   body?: unknown;
   createdAt: number;
   // Bumped on each failed retryable (network/5xx) send; flushOutbox drops the op past a cap as a
