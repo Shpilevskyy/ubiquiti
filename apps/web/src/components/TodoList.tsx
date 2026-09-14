@@ -17,10 +17,17 @@ interface TodoListProps {
   todos: Todo[];
   onToggleTodo: (todoId: string, done: boolean) => void;
   onUpdateTodoDescription: (todoId: string, descriptionMd: string, baseDescriptionMd: string | null) => void;
+  onUpdateTodoCost: (todoId: string, costCents: number | null, baseCostCents: number | null) => void;
   onDeleteTodo: (todoId: string) => void;
   onReorderTodo: (todoId: string, position: number) => void;
   onToggleSubTask: (todoId: string, subtaskId: string, done: boolean) => void;
   onDeleteSubTask: (todoId: string, subtaskId: string) => void;
+  onUpdateSubTaskCost: (
+    todoId: string,
+    subtaskId: string,
+    costCents: number | null,
+    baseCostCents: number | null,
+  ) => void;
   onReorderSubTask: (todoId: string, subtaskId: string, position: number) => void;
   newSubTaskTitles: Record<string, string>;
   onSubTaskTitleChange: (todoId: string, value: string) => void;
@@ -31,10 +38,12 @@ export function TodoList({
   todos,
   onToggleTodo,
   onUpdateTodoDescription,
+  onUpdateTodoCost,
   onDeleteTodo,
   onReorderTodo,
   onToggleSubTask,
   onDeleteSubTask,
+  onUpdateSubTaskCost,
   onReorderSubTask,
   newSubTaskTitles,
   onSubTaskTitleChange,
@@ -64,9 +73,18 @@ export function TodoList({
               onUpdateDescription={(descriptionMd) =>
                 onUpdateTodoDescription(todo.id, descriptionMd, todo.descriptionMd)
               }
+              onUpdateCost={(costCents) => onUpdateTodoCost(todo.id, costCents, todo.costCents)}
               onDelete={() => onDeleteTodo(todo.id)}
               onToggleSubTask={(subtaskId, done) => onToggleSubTask(todo.id, subtaskId, done)}
               onDeleteSubTask={(subtaskId) => onDeleteSubTask(todo.id, subtaskId)}
+              onUpdateSubTaskCost={(subtaskId, costCents) =>
+                onUpdateSubTaskCost(
+                  todo.id,
+                  subtaskId,
+                  costCents,
+                  todo.subtasks.find((subtask) => subtask.id === subtaskId)?.costCents ?? null,
+                )
+              }
               onReorderSubTask={(subtaskId, position) => onReorderSubTask(todo.id, subtaskId, position)}
               newSubTaskTitle={newSubTaskTitles[todo.id] ?? ''}
               onSubTaskTitleChange={(value) => onSubTaskTitleChange(todo.id, value)}

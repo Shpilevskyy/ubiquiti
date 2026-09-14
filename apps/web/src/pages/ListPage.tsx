@@ -4,6 +4,7 @@ import { TodoList } from '../components/TodoList';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
 import { useList } from '../hooks/useList';
 import { useListSocket } from '../hooks/useListSocket';
+import { formatCents, listTotalCents } from '../lib/cost';
 
 export function ListPage() {
   const { listId } = useParams<{ listId: string }>();
@@ -18,10 +19,12 @@ export function ListPage() {
     createTodo,
     toggleTodo,
     updateTodoDescription,
+    updateTodoCost,
     deleteTodo,
     reorderTodo,
     createSubTask,
     toggleSubTask,
+    updateSubTaskCost,
     reorderSubTask,
     deleteSubTask,
     deleteList,
@@ -48,6 +51,7 @@ export function ListPage() {
   }
 
   const { list, todos } = listQuery.data!;
+  const totalCents = listTotalCents(todos);
 
   function handleAddTodo(event: FormEvent) {
     event.preventDefault();
@@ -73,7 +77,10 @@ export function ListPage() {
     <main className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto w-full max-w-xl rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold text-slate-900">{list.title}</h1>
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-xl font-semibold text-slate-900">{list.title}</h1>
+            {totalCents > 0 && <span className="text-sm text-slate-400">Total: {formatCents(totalCents)}</span>}
+          </div>
 
           <div className="flex items-center gap-3">
             {connectionStatus === 'offline' && (
@@ -111,12 +118,18 @@ export function ListPage() {
           onUpdateTodoDescription={(todoId, descriptionMd, baseDescriptionMd) =>
             updateTodoDescription.mutate({ todoId, descriptionMd, baseDescriptionMd })
           }
+          onUpdateTodoCost={(todoId, costCents, baseCostCents) =>
+            updateTodoCost.mutate({ todoId, costCents, baseCostCents })
+          }
           onDeleteTodo={(todoId) => deleteTodo.mutate(todoId)}
           onReorderTodo={(todoId, position) => reorderTodo.mutate({ todoId, position })}
           onToggleSubTask={(todoId, subtaskId, done) =>
             toggleSubTask.mutate({ todoId, subtaskId, done })
           }
           onDeleteSubTask={(todoId, subtaskId) => deleteSubTask.mutate({ todoId, subtaskId })}
+          onUpdateSubTaskCost={(todoId, subtaskId, costCents, baseCostCents) =>
+            updateSubTaskCost.mutate({ todoId, subtaskId, costCents, baseCostCents })
+          }
           onReorderSubTask={(todoId, subtaskId, position) =>
             reorderSubTask.mutate({ todoId, subtaskId, position })
           }

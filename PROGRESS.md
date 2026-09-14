@@ -344,6 +344,31 @@ reproducing the exact failure mode before and after.
       [specs/00](specs/00-overview.md) now states that specs are design intent while PROGRESS.md
       is the as-built record, listing the standing divergences.
 
+- [x] Cost/price UI — [tasks/01-cost-tracking-ui.md](tasks/01-cost-tracking-ui.md): `costCents` was
+      already fully wired server/shared-side with zero UI (the task's finding). Added
+      `updateTodoCost`/`updateSubTaskCost` mutations to `useList.ts`, mirroring
+      `updateTodoDescription` exactly (same `mutateWithOutbox`/`base`/conflict-toast path), so cost
+      edits are offline-safe and realtime-broadcast for free — no server change needed. New
+      `CostInput` component (`apps/web/src/components/CostInput.tsx`) mirrors `TodoDescription`'s
+      click-to-edit pattern: commits on blur/Enter, `Escape` discards, displays via
+      `Intl.NumberFormat` currency formatting, shows a muted "Add cost…" placeholder when null.
+      Parsing (`lib/cost.ts#parseCostInput`) strips `$`/commas/whitespace, rejects anything that
+      isn't a non-negative decimal (so `abc`/`-5` are silently discarded, never sent), and rounds to
+      the nearest cent so the result is always a valid integer (`costCents` is `z.number().int()`
+      and 400s on a float). Clearing the field sends `null`, never `0`.
+      **Rollup**: implemented the task's recommended option — a todo shows its own cost plus a
+      separate subtask subtotal, and the list header shows a grand total. See Decisions below.
+      Browser-verified end-to-end: set a todo cost ($12.50) and a subtask cost (entered `4.999`,
+      correctly rounded to $5.00), confirmed the subtotal and grand total recomputed correctly;
+      entered `abc` and `-5` and confirmed via the network log that no PATCH was ever sent for
+      either; cleared a cost and confirmed via a direct API fetch that it persisted as
+      `costCents: null`, not `0`; reloaded and confirmed both costs persisted; opened a second tab,
+      set a cost there, and watched it and the grand total update live in the first tab with no
+      reload (proves the existing `TODO_UPDATED`/`SUBTASK_UPDATED` broadcast already covers the
+      field); dispatched a real `offline` event, set a subtask cost (applied immediately,
+      optimistic, no request sent), and confirmed it reached the server once the existing
+      poll-based flush ran — same outbox path as every other field. Clean full build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
@@ -419,6 +444,13 @@ Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
   "Failed to load list: List not found" error branch — no dedicated UI built for that case.
   "Delete list"/"Delete" buttons added to `ListPage` and the landing page's list rows, both behind
   a native `confirm()` given the cascade is irreversible.
+- Cost rollup semantics ([tasks/01-cost-tracking-ui.md](tasks/01-cost-tracking-ui.md)): a todo's own
+  cost and its subtasks' costs are shown separately — the todo's own `CostInput` plus a
+  "Subtotal: $X" line under its subtasks (only rendered when it has any) — rather than summing
+  subtask costs into the parent's total. Summing silently would hide the subtasks' contribution
+  whenever the parent also carries its own cost. The list header shows one grand total (every
+  todo's own cost plus every subtask's, across the list), hidden when zero to match the app's
+  existing pattern for optional affordances (presence avatars, the Offline pill).
 
 ## Open questions
 

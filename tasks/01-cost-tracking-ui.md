@@ -1,6 +1,6 @@
 # 01 — Cost/price UI for todos and subtasks
 
-**Status:** not started
+**Status:** done — see PROGRESS.md Completed
 **Size:** M
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -70,8 +70,8 @@ This is the single most visible gap for a reviewer, and the cheapest to close.
 
 ## Done when
 
-- [ ] Cost is viewable and editable on both todos and subtasks
-- [ ] Totals visible at the list level
-- [ ] Edits go through the outbox (offline-safe) and broadcast to other tabs
-- [ ] Invalid input is rejected client-side, never sent
-- [ ] Rollup semantics recorded in PROGRESS.md Decisions
+- [x] Cost is viewable and editable on both todos and subtasks
+- [x] Totals visible at the list level
+- [x] Edits go through the outbox (offline-safe) and broadcast to other tabs
+- [x] Invalid input is rejected client-side, never sent
+- [x] Rollup semantics recorded in PROGRESS.md Decisions

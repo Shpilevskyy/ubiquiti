@@ -266,6 +266,40 @@ export function useList(listId: string | undefined) {
     },
   });
 
+  // Cost tracking (tasks/01-cost-tracking-ui.md): same PATCH/outbox/conflict path as
+  // updateTodoDescription, just a different field.
+  const updateTodoCost = useMutation({
+    ...OFFLINE_AWARE,
+    mutationFn: ({
+      todoId,
+      costCents,
+      baseCostCents,
+    }: {
+      todoId: string;
+      costCents: number | null;
+      baseCostCents: number | null;
+    }) =>
+      mutateWithOutbox<{ hadConflict: boolean }>(
+        {
+          method: 'PATCH',
+          path: `/lists/${listId}/todos/${todoId}`,
+          body: { costCents, base: { costCents: baseCostCents } },
+        },
+        (old) =>
+          old &&
+          produce(old, (draft) => {
+            const todo = draft.todos.find((t) => t.id === todoId);
+            if (todo) {
+              todo.costCents = costCents;
+              todo.updatedAt = now();
+            }
+          }),
+      ),
+    onSuccess: (result) => {
+      if (result.sent) noteConflict(result.response.hadConflict);
+    },
+  });
+
   const deleteTodo = useMutation({
     ...OFFLINE_AWARE,
     mutationFn: (todoId: string) =>
@@ -352,6 +386,41 @@ export function useList(listId: string | undefined) {
     },
   });
 
+  // See updateTodoCost above — same idea, one level down.
+  const updateSubTaskCost = useMutation({
+    ...OFFLINE_AWARE,
+    mutationFn: ({
+      todoId,
+      subtaskId,
+      costCents,
+      baseCostCents,
+    }: {
+      todoId: string;
+      subtaskId: string;
+      costCents: number | null;
+      baseCostCents: number | null;
+    }) =>
+      mutateWithOutbox<{ hadConflict: boolean }>(
+        {
+          method: 'PATCH',
+          path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`,
+          body: { costCents, base: { costCents: baseCostCents } },
+        },
+        (old) =>
+          old &&
+          produce(old, (draft) => {
+            const subtask = draft.todos.find((t) => t.id === todoId)?.subtasks.find((s) => s.id === subtaskId);
+            if (subtask) {
+              subtask.costCents = costCents;
+              subtask.updatedAt = now();
+            }
+          }),
+      ),
+    onSuccess: (result) => {
+      if (result.sent) noteConflict(result.response.hadConflict);
+    },
+  });
+
   // See reorderTodo above — same idea, one level down.
   const reorderSubTask = useMutation({
     ...OFFLINE_AWARE,
@@ -400,10 +469,12 @@ export function useList(listId: string | undefined) {
     createTodo,
     toggleTodo,
     updateTodoDescription,
+    updateTodoCost,
     deleteTodo,
     reorderTodo,
     createSubTask,
     toggleSubTask,
+    updateSubTaskCost,
     reorderSubTask,
     deleteSubTask,
     deleteList,

@@ -11,7 +11,9 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Todo } from '@ubiquiti-todo/shared';
+import { formatCents, subtaskSubtotalCents } from '../lib/cost';
 import { computeReorderPosition } from '../lib/position';
+import { CostInput } from './CostInput';
 import { SubtaskItem } from './SubtaskItem';
 import { TodoDescription } from './TodoDescription';
 
@@ -20,8 +22,10 @@ interface TodoItemProps {
   onToggle: () => void;
   onDelete: () => void;
   onUpdateDescription: (descriptionMd: string) => void;
+  onUpdateCost: (costCents: number | null) => void;
   onToggleSubTask: (subtaskId: string, done: boolean) => void;
   onDeleteSubTask: (subtaskId: string) => void;
+  onUpdateSubTaskCost: (subtaskId: string, costCents: number | null) => void;
   onReorderSubTask: (subtaskId: string, position: number) => void;
   newSubTaskTitle: string;
   onSubTaskTitleChange: (value: string) => void;
@@ -33,8 +37,10 @@ export function TodoItem({
   onToggle,
   onDelete,
   onUpdateDescription,
+  onUpdateCost,
   onToggleSubTask,
   onDeleteSubTask,
+  onUpdateSubTaskCost,
   onReorderSubTask,
   newSubTaskTitle,
   onSubTaskTitleChange,
@@ -77,6 +83,7 @@ export function TodoItem({
         <span className={`flex-1 text-sm text-slate-900 ${todo.done ? 'text-slate-400 line-through' : ''}`}>
           {todo.title}
         </span>
+        <CostInput costCents={todo.costCents} onSave={onUpdateCost} />
         <button
           onClick={onDelete}
           className="text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
@@ -101,11 +108,16 @@ export function TodoItem({
                 subtask={subtask}
                 onToggle={() => onToggleSubTask(subtask.id, !subtask.done)}
                 onDelete={() => onDeleteSubTask(subtask.id)}
+                onUpdateCost={(costCents) => onUpdateSubTaskCost(subtask.id, costCents)}
               />
             ))}
           </ul>
         </SortableContext>
       </DndContext>
+
+      {todo.subtasks.length > 0 && (
+        <p className="ml-7 mt-1 pl-4 text-xs text-slate-400">Subtotal: {formatCents(subtaskSubtotalCents(todo))}</p>
+      )}
 
       <form onSubmit={onAddSubTask} className="ml-7 mt-1 flex gap-2 pl-4">
         <input

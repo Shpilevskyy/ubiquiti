@@ -1,14 +1,16 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { SubTask } from '@ubiquiti-todo/shared';
+import { CostInput } from './CostInput';
 
 interface SubtaskItemProps {
   subtask: SubTask;
   onToggle: () => void;
   onDelete: () => void;
+  onUpdateCost: (costCents: number | null) => void;
 }
 
-export function SubtaskItem({ subtask, onToggle, onDelete }: SubtaskItemProps) {
+export function SubtaskItem({ subtask, onToggle, onDelete, onUpdateCost }: SubtaskItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: subtask.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
@@ -36,6 +38,7 @@ export function SubtaskItem({ subtask, onToggle, onDelete }: SubtaskItemProps) {
       <span className={`flex-1 text-sm text-slate-600 ${subtask.done ? 'text-slate-400 line-through' : ''}`}>
         {subtask.title}
       </span>
+      <CostInput costCents={subtask.costCents} onSave={onUpdateCost} />
       <button
         onClick={onDelete}
         className="text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
