@@ -66,7 +66,12 @@ limit; profligate transactions are a real cost there.
 
 ## Done when
 
-- [ ] Both create routes are a single `upsert`
-- [ ] P2003 maps to 404 centrally
-- [ ] Concurrent duplicate creates return 200, not 500
-- [ ] No transactions added where a single statement already suffices
+- [x] Both create routes are a single round trip on the fast path — **not** `upsert` as originally
+      proposed here: verified via Prisma's query logger that `upsert` isn't actually atomic against
+      concurrent requests (it compiles to `BEGIN; SELECT; INSERT; COMMIT`, not a native
+      `INSERT ... ON CONFLICT`), and reproduced the exact race it was supposed to fix. Used a bare
+      `create` racing on the database's own unique constraint instead, with the loser catching
+      `P2002` and re-fetching — genuinely atomic. See the PROGRESS.md entry for the full story.
+- [x] P2003 maps to 404 centrally
+- [x] Concurrent duplicate creates return 200, not 500
+- [x] No transactions added where a single statement already suffices
