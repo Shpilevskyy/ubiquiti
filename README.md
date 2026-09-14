@@ -5,6 +5,51 @@ Framework: React
 Backend: Node
 
 
+## Running locally
+
+**Prerequisites:** [Node.js](https://nodejs.org/) 22+, [Docker](https://www.docker.com/) (for a
+local Postgres instance).
+
+Fastest path — from the repo root:
+
+```bash
+./scripts/setup.sh   # installs deps, starts Postgres, writes apps/server/.env, runs migrations
+npm run dev           # starts the API (port 3001) and web app (port 5173)
+```
+
+Then open http://localhost:5173.
+
+<details>
+<summary>What the setup script does (manual equivalent)</summary>
+
+```bash
+npm install
+docker-compose up -d                                  # Postgres on localhost:5432
+cp apps/server/.env.example apps/server/.env           # matches the docker-compose defaults as-is
+npm run db:migrate -w @ubiquiti-todo/server             # applies Prisma migrations
+```
+
+</details>
+
+`npm run dev` builds `packages/shared`, then runs the Fastify API and the Vite dev server
+together; Vite proxies `/api` and `/socket.io` to the API, so only one origin
+(http://localhost:5173) needs to be opened. The API also exposes a `GET /healthz` readiness
+check at http://localhost:3001/healthz, handy for confirming it can reach Postgres.
+
+Other useful scripts (see [package.json](package.json) at the root and in each workspace):
+
+| Command | Description |
+| --- | --- |
+| `npm run build` | Production build of every workspace |
+| `npm run typecheck` | Type-checks server and web without emitting |
+| `npm run lint` / `npm run format` | Biome lint / format |
+| `npm run start` | Runs the production server (applies pending migrations, then serves API + built web app from one process) |
+| `npm run db:migrate -w @ubiquiti-todo/server` | Create/apply a Prisma migration in dev |
+
+**Troubleshooting:** if `npm run dev` can't reach the database, confirm the `postgres` container
+is up (`docker-compose ps`) and that nothing else on the machine is already bound to port 5432.
+
+
 ## User stories:
 * I as a user can create to-do items, such as a grocery list.
 
