@@ -1,6 +1,6 @@
 # 03 — Outbox atomicity, poison ops, single-flight flush
 
-**Status:** not started
+**Status:** done — see PROGRESS.md Completed
 **Size:** M
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -112,8 +112,8 @@ Bug 3:
 
 ## Done when
 
-- [ ] `enqueue`/`dequeue` use a single atomic `update()` transaction
-- [ ] Any 4xx drops the op with a notice and the flush continues past it
-- [ ] `attempts` cap bounds any other permanent failure
-- [ ] At most one flush runs and at most one retry timer is pending at any time
-- [ ] Rapid offline writes all survive to the server
+- [x] `enqueue`/`dequeue` use a single atomic `update()` transaction
+- [x] Any 4xx drops the op with a notice and the flush continues past it
+- [x] `attempts` cap bounds any other permanent failure
+- [x] At most one flush runs and at most one retry timer is pending at any time
+- [x] Rapid offline writes all survive to the server

@@ -5,10 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import type { GetListResponse, SubTask, Todo } from '@ubiquiti-todo/shared';
 import { api, HttpError, sendOp } from '../lib/api';
 import { connectionStatus } from '../lib/connectionStatus';
-import { dequeue, enqueue, getQueue, type QueuedOp } from '../lib/outbox';
+import { dequeue, enqueue, getQueue, recordAttempt, type QueuedOp } from '../lib/outbox';
 
 const FLUSH_RETRY_BASE_MS = 2000;
 const FLUSH_RETRY_MAX_MS = 30000;
+// Safety net beyond the specific permanent-failure cases (404, other 4xx) enumerated below: bounds
+// *any* failure mode that would otherwise retry forever, including ones introduced later.
+const MAX_FLUSH_ATTEMPTS = 10;
+const DISCARDED_MESSAGE = 'A change could not be saved and was discarded';
 // Belt-and-braces beyond the spec's two triggers: browsers are inconsistent about firing the
 // online/offline DOM events for a *real* network change (as opposed to devtools-simulated
 // offline) — Chrome in particular can miss them, so a queued op could otherwise sit stuck until
@@ -87,6 +91,13 @@ export function useList(listId: string | undefined) {
         await dequeue(listId!, queued.opId);
         showNotice('This item no longer exists');
         invalidate();
+      } else if (err instanceof HttpError && err.status < 500) {
+        // Any other 4xx (e.g. a rejected body) is a permanent failure, not a transient one —
+        // retrying it would just fail again. Drop it here rather than letting it sit queued for
+        // flushOutbox to reach the same conclusion later.
+        await dequeue(listId!, queued.opId);
+        showNotice(DISCARDED_MESSAGE);
+        invalidate();
       }
       // Otherwise (network error, 5xx): stays queued for the eventual flush.
       return { sent: false };
@@ -105,6 +116,11 @@ export function useList(listId: string | undefined) {
   // against, and not gating on it is what makes the poll fallback work at all.
   const flushRetryDelayRef = useRef(FLUSH_RETRY_BASE_MS);
   const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // flushOutbox has four triggers (mount, connectionStatus, the poll, its own backoff timer) with
+  // no natural mutual exclusion. Without this guard, two overlapping runs both read the queue,
+  // both send the same head-of-queue op, and race each other's dequeue — this is also what makes
+  // the outbox.ts atomicity bug (tasks/03) reachable in practice, not just enqueue-vs-flush.
+  const isFlushingRef = useRef(false);
 
   // `reconcile` forces the closing invalidate() even when the queue was empty. Needed on
   // reconnect: while the socket was down this client missed every broadcast for the list, and
@@ -112,41 +128,66 @@ export function useList(listId: string | undefined) {
   // flush) removed the refetch that used to repair that. Without this, a network blip with
   // nothing queued leaves the client silently stale until it remounts.
   async function flushOutbox({ reconcile = false }: { reconcile?: boolean } = {}) {
-    if (!listId) return;
+    if (!listId || isFlushingRef.current) return;
+    isFlushingRef.current = true;
+    // Whatever triggered this run supersedes any backoff retry scheduled by a previous run — at
+    // most one timer should ever be outstanding, and this run's own outcome (success, or a fresh
+    // schedule below) is the only one that should matter from here.
+    clearTimeout(flushTimeoutRef.current);
+    flushTimeoutRef.current = undefined;
 
-    let sentAny = false;
-    while (true) {
-      const [op] = await getQueue(listId);
-      if (!op) break;
+    try {
+      let sentAny = false;
+      while (true) {
+        const [op] = await getQueue(listId);
+        if (!op) break;
 
-      try {
-        await sendOp(op);
-        await dequeue(listId, op.opId);
-        sentAny = true;
-        // A successful request is the strongest possible evidence we're online — feeds back into
-        // the belief connectionStatus tracks (and the "Offline" pill reads), so a successful poll
-        // fallback flush also self-heals a pill left stuck offline by a browser that never fired
-        // the online event in the first place.
-        connectionStatus.markOnline();
-      } catch (err) {
-        if (err instanceof HttpError && err.status === 404) {
+        try {
+          await sendOp(op);
           await dequeue(listId, op.opId);
-          showNotice('This item no longer exists');
-          continue;
+          sentAny = true;
+          // A successful request is the strongest possible evidence we're online — feeds back
+          // into the belief connectionStatus tracks (and the "Offline" pill reads), so a
+          // successful poll fallback flush also self-heals a pill left stuck offline by a browser
+          // that never fired the online event in the first place.
+          connectionStatus.markOnline();
+        } catch (err) {
+          if (err instanceof HttpError && err.status === 404) {
+            await dequeue(listId, op.opId);
+            showNotice('This item no longer exists');
+            continue;
+          }
+          if (err instanceof HttpError && err.status < 500) {
+            // Any other 4xx (e.g. a rejected body) is permanent, not transient — retrying it
+            // every poll would head-of-line-block every op queued behind it forever.
+            await dequeue(listId, op.opId);
+            showNotice(DISCARDED_MESSAGE);
+            continue;
+          }
+          // Network error / 5xx: worth retrying, but capped so a failure mode not enumerated
+          // above still can't retry forever.
+          const attempts = await recordAttempt(listId, op.opId);
+          if (attempts >= MAX_FLUSH_ATTEMPTS) {
+            await dequeue(listId, op.opId);
+            showNotice(DISCARDED_MESSAGE);
+            continue;
+          }
+          // Stop here, leave the rest queued, retry the whole flush later with backoff rather
+          // than looping tightly against a server/connection that's down.
+          flushTimeoutRef.current = setTimeout(() => flushOutbox({ reconcile }), flushRetryDelayRef.current);
+          flushRetryDelayRef.current = Math.min(flushRetryDelayRef.current * 2, FLUSH_RETRY_MAX_MS);
+          if (sentAny) invalidate();
+          return;
         }
-        // Network error / 5xx: stop here, leave the rest queued, retry the whole flush later
-        // with backoff rather than looping tightly against a server/connection that's down.
-        flushTimeoutRef.current = setTimeout(() => flushOutbox({ reconcile }), flushRetryDelayRef.current);
-        flushRetryDelayRef.current = Math.min(flushRetryDelayRef.current * 2, FLUSH_RETRY_MAX_MS);
-        if (sentAny) invalidate();
-        return;
       }
-    }
 
-    flushRetryDelayRef.current = FLUSH_RETRY_BASE_MS;
-    // Ordering matters: the invalidate only runs once the queue has drained, so a refetch can
-    // never overwrite a still-unsent optimistic change.
-    if (sentAny || reconcile) invalidate();
+      flushRetryDelayRef.current = FLUSH_RETRY_BASE_MS;
+      // Ordering matters: the invalidate only runs once the queue has drained, so a refetch can
+      // never overwrite a still-unsent optimistic change.
+      if (sentAny || reconcile) invalidate();
+    } finally {
+      isFlushingRef.current = false;
+    }
   }
 
   useEffect(() => {

@@ -380,6 +380,38 @@ reproducing the exact failure mode before and after.
       toggled the other from a second tab (`2/2` live, no reload), deleted a subtask (denominator
       dropped to `1/1`), deleted the last one (indicator disappeared entirely). Clean web build.
 
+- [x] Outbox atomicity, poison ops, single-flight flush —
+      [tasks/03-outbox-reliability.md](tasks/03-outbox-reliability.md): three interlocking offline
+      bugs found by reading the code.
+      **Atomicity**: `enqueue`/`dequeue` (`lib/outbox.ts`) were separate `get()` then `set()` calls
+      across two IndexedDB transactions — two concurrent callers (two quick offline mutations, or
+      an enqueue racing a flush's dequeue) could interleave and silently drop one write. Swapped
+      both to `idb-keyval`'s `update()`, which does the read-modify-write inside one transaction.
+      **Poison ops**: only 404 was treated as permanent; any other 4xx (e.g. a rejected body)
+      retried every 15s forever and, since the flush is strictly FIFO with `await` between ops,
+      head-of-line-blocked every op queued behind it. Any 4xx now dequeues with a notice
+      ("A change could not be saved and was discarded") and the flush continues — fixed in both
+      `flushOutbox` and `mutateWithOutbox`'s immediate-send path, which had the same shape. Added a
+      `QueuedOp.attempts` counter (new `outbox.ts#recordAttempt`, atomic like enqueue/dequeue,
+      defaults `op.attempts ?? 0` for queues persisted before this change) as a safety net: past 10
+      failed attempts an op is dropped regardless of status, bounding any failure mode not already
+      handled as permanent.
+      **Single-flight**: `flushOutbox` had four triggers (mount, `connectionStatus`, the 15s poll,
+      its own backoff timer) and no in-flight guard, so overlapping runs could both read the queue
+      and both send the same head-of-queue op — also what made the atomicity bug reachable in
+      practice, not just enqueue-vs-flush. Added an `isFlushingRef` guard (short-circuits if a flush
+      is already running) and now clear any pending retry timer at the start of every flush
+      attempt, so at most one is ever outstanding instead of accumulating a chain per failure.
+      **Verified** in the dev console against a live server: fired two concurrent `enqueue` calls
+      for the same list and confirmed both survived (the exact race from the bug report); added
+      five todos as fast as the UI allows while offline and confirmed all five landed on the server,
+      none lost or duplicated; hand-queued a `PATCH` with an empty `title` (guaranteed 400) ahead of
+      a valid queued op and confirmed the flush dropped the bad one with the notice and still sent
+      the valid one behind it; pre-seeded an op's `attempts` to 9 and confirmed the 10th failure
+      dropped it via the cap rather than retrying forever; fired five `online` events back-to-back
+      with one op queued and confirmed (via the network log) exactly one PATCH was sent, not five.
+      Clean full build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
