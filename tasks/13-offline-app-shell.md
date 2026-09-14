@@ -1,7 +1,8 @@
 # 13 — PWA app shell + query persistence so a cold offline load works
 
-**Status:** in progress — piece 1 (app shell) landed, see PROGRESS.md; piece 2 (query
-persistence) still to do
+**Status:** both pieces landed (see PROGRESS.md); real-browser verification of the cold-offline-
+reload scenario still outstanding — this session's browser tool can't register a service worker,
+see "Done when" below
 **Size:** L
 **Depends on:** [06](06-offline-edge-cases.md) (the paused-query crash becomes far more reachable
 once cold offline loads are possible — fix it first)
@@ -80,9 +81,22 @@ The real test is the one that fails today:
 
 ## Done when
 
-- [ ] Cold offline load renders the app and the cached list
-- [ ] Offline-created todos visible after a hard reload, and still sync on reconnect
-- [ ] Service worker does not intercept `/api` or `/socket.io`
-- [ ] Realtime verified unaffected
-- [ ] Update strategy handles a redeploy
-- [ ] Storage choice recorded in PROGRESS.md Decisions
+- [ ] Cold offline load renders the app and the cached list — code is in place (precached shell +
+      persisted query cache) but **not verified end-to-end**: this session's browser tool refuses
+      all `navigator.serviceWorker.register()` calls, so the actual "kill network, hard reload"
+      test couldn't be run here. Needs a real-browser check before fully trusting this. A closely
+      related scenario — remounting the list view while `/api` calls fail, exercising the
+      persisted-cache-survives-an-error path without needing the service worker — was verified
+      (see PROGRESS.md) and did surface and fix a real bug (`ListPage`'s error-before-data check
+      order).
+- [ ] Offline-created todos visible after a hard reload, and still sync on reconnect — same
+      service-worker-registration caveat as above; the write path itself (outbox → flush →
+      reconcile) is unchanged and already covered by tasks/03's verification.
+- [x] Service worker does not intercept `/api` or `/socket.io` — confirmed in the built
+      `dist/sw.js`'s `NavigationRoute` denylist.
+- [x] Realtime verified unaffected — two-tab-equivalent probe (spoofed second client via curl/fetch
+      while the app tab stayed open) still applied live with no reload, both before and after the
+      query-persistence change.
+- [ ] Update strategy handles a redeploy — `registerType: 'prompt'` + `UpdatePrompt` implemented,
+      not exercised against a real redeploy (same service-worker-registration caveat).
+- [x] Storage choice recorded in PROGRESS.md Decisions — localStorage, see PROGRESS.md.

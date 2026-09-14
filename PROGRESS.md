@@ -841,6 +841,54 @@ reproducing the exact failure mode before and after.
       TanStack cache, so a cold offline load will render the app frame but not the list contents.
       Piece 1 alone is a real but partial step; the task isn't done until piece 2 lands.
 
+- [x] Query persistence (piece 2/2 of [tasks/13](tasks/13-offline-app-shell.md), completing the
+      task): `@tanstack/query-sync-storage-persister` + `persistQueryClient`, wired in
+      [App.tsx](apps/web/src/App.tsx) right where `queryClient` is created. Persists only the
+      `['list', id]` and `['lists']` query shapes (a key-prefix filter composed with TanStack's
+      own `defaultShouldDehydrateQuery`, so a query that's currently loading/erroring isn't
+      persisted with no usable data) — nothing else in this app needs to survive a reload.
+      **Storage choice: `localStorage`**, not IndexedDB (the task asked this be decided and
+      recorded, see Decisions below).
+      **A real bug found and fixed while verifying this**: [ListPage.tsx](apps/web/src/pages/ListPage.tsx)
+      checked `listQuery.isError` before checking whether `listQuery.data` was present. That was
+      fine when it was written (tasks/06, defending against a *different* paused-query state) but
+      is actively wrong now — TanStack Query's `'error'` action sets `status: 'error'` on **any**
+      failed fetch, including a background refetch on an already-successful query, and does *not*
+      clear the existing `data`. Piece 2 makes that the common case, not an edge case: a cold
+      offline mount always has persisted `data` (that's the point) and always fails its mount-time
+      fetch (`networkMode: 'always'`) while offline — so unmodified, `ListPage` would hide the very
+      data persistence just restored behind a "Failed to load list" screen the instant the failed
+      fetch resolved. Fixed by checking `data` first: render it whenever present, regardless of a
+      concurrent/subsequent fetch error, and only show the error screen when there's truly no data
+      to fall back on. Confirmed by reading `query-core`'s reducer directly
+      (`node_modules/@tanstack/query-core/build/modern/query.js`, the `case "error"` branch),
+      not just inferred from behavior.
+      **Verified**: full monorepo build/typecheck/lint clean. Since this session's browser tool
+      can't register a service worker (see piece 1's entry above), the literal "go offline, hard
+      reload" test isn't directly available here. Used a proxy that exercises the same code path
+      minus the service worker: loaded a real list (online, so TanStack persisted it to
+      `localStorage` — confirmed via reading the `REACT_QUERY_OFFLINE_CACHE` key directly),
+      patched `window.fetch` to reject every `/api/` call (simulating offline without touching
+      the SW), then forced a remount of `ListPage` via client-side navigation away and back. Before
+      the `ListPage` fix: blank error screen (`Failed to load list: simulated offline`) — the exact
+      bug described above, and it also **erased the persisted snapshot**, since `persistQueryClient`
+      re-persists on every cache change and the now-`error`-status query no longer passed the
+      dehydrate filter. After the fix: the list rendered correctly from cache with the existing
+      "Offline" pill showing, and the persisted snapshot stayed intact. Restored `fetch` and
+      confirmed everything returns to normal (no "Offline" pill, todo/list interactions work).
+      Separately confirmed no regression in realtime: with the app tab open and unpatched, sent a
+      todo creation via a spoofed second client (direct `fetch` to the API, distinct `X-Client-Id`)
+      and confirmed it applied live with no reload, both before and after this change.
+      **Also confirmed while debugging, unrelated to this task's code**: the ad-hoc local server
+      used for this verification (`node dist/index.js`, `NODE_ENV=production`) briefly appeared to
+      serve a broken app (JS bundle returned as `text/html`) after a rebuild — traced to
+      `@fastify/static`'s `wildcard: false` mode, which snapshots the dist directory's file list
+      *once at server startup* rather than serving it dynamically; a server process left running
+      across a rebuild has stale routes for any file whose content-hashed name changed. Restarting
+      the process (exactly what every real deploy already does, build-then-fresh-start) resolved
+      it — not a bug in this repo, just a trap specific to re-testing against a long-lived local
+      server across edits without restarting it.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
@@ -930,6 +978,14 @@ Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
   aggregated "Some changes were also edited elsewhere" toast per flush, not one per op) rather than
   document the silence as acceptable — an extra toast after reconnecting seemed like the smaller
   cost next to a silently lost edit.
+
+- Query persistence storage ([tasks/13-offline-app-shell.md](tasks/13-offline-app-shell.md)):
+  `localStorage` over IndexedDB for the persisted TanStack Query cache. It's synchronous, so the
+  cache is available on the very first render with no async hydration flicker, and list/todo JSON
+  is well within its ~5MB limit for a demo app. IndexedDB (already used for the outbox queue) would
+  only earn its async complexity — and `@tanstack/query-async-storage-persister`'s extra moving
+  parts — at a data size this app doesn't reach. Either was defensible per the task's own framing;
+  this is the one with less code for the win it needed to deliver.
 
 ## Open questions
 

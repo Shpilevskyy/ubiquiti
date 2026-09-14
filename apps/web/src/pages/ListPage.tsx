@@ -25,26 +25,28 @@ function ListPageContent({ listId }: { listId: string }) {
 
   const { listQuery, createTodo, deleteList, conflictNotice, dismissConflictNotice } = useListContext();
 
-  if (listQuery.isLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
-        <p className="text-sm text-slate-500">Loading…</p>
-      </main>
-    );
-  }
-  if (listQuery.isError) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
-        <p className="text-sm text-red-600">
-          Failed to load list: {(listQuery.error as Error).message}
-        </p>
-      </main>
-    );
-  }
-  // Defensive, not just belt-and-braces: a non-null assertion on query data is never safe across
-  // every TanStack state (tasks/06) — isLoading/isError can both be false with data still
-  // undefined, and asserting past that crashed this page with a blank screen.
+  // `data` is checked before `isError`, not after: TanStack's 'error' action (query-core's
+  // #dispatch) sets `status: 'error'` on ANY failed fetch — including a background refetch on an
+  // already-successful query — without clearing the existing `data`. Checking `isError` first
+  // would hide perfectly good cached data behind an error screen the instant that background
+  // fetch fails, which is now the *common* case, not an edge case: tasks/13's persisted query
+  // cache (piece 2) means a cold offline mount always has persisted `data` and always fails its
+  // mount-time fetch (networkMode: 'always') while offline — exactly the scenario persistence
+  // exists to serve. `isError` is only reachable now when there's truly no data to fall back on
+  // (first-ever load of a list, e.g. a bad link, failing before anything was cached).
   if (!listQuery.data) {
+    if (listQuery.isError) {
+      return (
+        <main className="flex min-h-screen items-center justify-center bg-slate-50">
+          <p className="text-sm text-red-600">
+            Failed to load list: {(listQuery.error as Error).message}
+          </p>
+        </main>
+      );
+    }
+    // Defensive, not just belt-and-braces: a non-null assertion on query data is never safe
+    // across every TanStack state (tasks/06) — isLoading/isError can both be false with data
+    // still undefined, and asserting past that crashed this page with a blank screen.
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50">
         <p className="text-sm text-slate-500">Loading…</p>
