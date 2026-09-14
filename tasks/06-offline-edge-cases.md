@@ -1,6 +1,6 @@
 # 06 — Paused-query crash, `deleteList` while offline, toast timers
 
-**Status:** not started
+**Status:** done — see PROGRESS.md Completed
 **Size:** S
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -90,7 +90,7 @@ keep accruing bugs.
 
 ## Done when
 
-- [ ] `ListPage` cannot crash on undefined query data in any TanStack state
-- [ ] List query's `networkMode` is set deliberately, consistent with the mutations
-- [ ] `deleteList` fails fast offline instead of pausing invisibly
-- [ ] Overlapping notices each display for their full duration; timers cleared on unmount
+- [x] `ListPage` cannot crash on undefined query data in any TanStack state
+- [x] List query's `networkMode` is set deliberately, consistent with the mutations
+- [x] `deleteList` fails fast offline instead of pausing invisibly
+- [x] Overlapping notices each display for their full duration; timers cleared on unmount

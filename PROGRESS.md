@@ -475,6 +475,41 @@ reproducing the exact failure mode before and after.
       an op with a deliberately stale `base`, reconnected, and confirmed the aggregated conflict
       toast fired. Clean full build.
 
+- [x] Paused-query crash, `deleteList` while offline, notice timers —
+      [tasks/06-offline-edge-cases.md](tasks/06-offline-edge-cases.md), closing out P2. Three small
+      independent bugs in the offline/UX seam.
+      **Paused-query crash**: the list query was the one network call left on TanStack's default
+      `networkMode: 'online'` while every mutation already opts into `'always'`
+      (`OFFLINE_AWARE`) — offline, `'online'` *pauses* the query rather than failing it, so
+      `isLoading`/`isError` both read `false` with `data` still `undefined`, and `ListPage`'s
+      `listQuery.data!` crashed to a blank screen. Set `networkMode: 'always'` on the list query
+      too (consistent with the mutations: attempt, fail, land in the existing error branch), and
+      independently made `ListPage` defensive — an explicit `if (!listQuery.data)` guard instead of
+      the non-null assertion, since no single TanStack state combination is safe to assert past.
+      **`deleteList` hanging offline**: the one mutation without `OFFLINE_AWARE`; its comment said
+      "requires being online" but the actual default-`networkMode` behavior is pause, not fail —
+      offline, the button stayed disabled indefinitely and the delete would silently fire whenever
+      TanStack next believed it was online, long after the user gave up. Added `OFFLINE_AWARE` plus
+      an explicit `connectionStatus.getStatus()` check inside `mutationFn` that shows "Can't delete
+      while offline" and throws before ever calling the API — fails fast and visibly instead of
+      queuing a destructive, `confirm()`-gated action somewhere invisible.
+      **Notice timers**: `showNotice` didn't keep its `setTimeout` handle, so a second notice
+      arriving before the first's 4s elapsed got cut short by the first's stale timer. Now keeps
+      the handle in a ref, clears it before scheduling a new one, and clears it on unmount too.
+      **Verified in-browser**: patched `fetch` to reject a specific list's GET and confirmed
+      `ListPage` renders the error branch cleanly, not a blank screen; went offline and clicked
+      "Delete list" — got the notice immediately, the button never got stuck, and (confirmed via
+      the network log) no request was even attempted; came back online and confirmed delete still
+      works normally; triggered two notices exactly 1s apart via scripted clicks and sampled the
+      DOM on a precise timer — the second notice was still showing at t+3.1s (past the point the
+      old bug would have cleared it at t+3s) and cleared at its own correct t+4s, not the first
+      notice's. Clean full build.
+      **Housekeeping note**: while testing the crash fix, mistakenly deleted a pre-existing demo
+      list ("conflict test", not one created for this task's testing) during test cleanup instead
+      of a list created for this session — caught and disclosed immediately, no code or data
+      recovery needed (this app holds no real data, see specs/00), but noted here as a reminder to
+      create fresh test fixtures rather than reusing/deleting existing ones.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

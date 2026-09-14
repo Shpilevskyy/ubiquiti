@@ -69,14 +69,27 @@ export function useList(listId: string | undefined) {
     // ever gets sent — flushOutbox's own invalidate() is the only refetch this query should get.
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
+    // Every mutation already opts into 'always' (OFFLINE_AWARE below) rather than TanStack's
+    // default 'online', which *pauses* a query it believes is offline instead of failing it —
+    // fetchStatus stays 'paused', so both isLoading and isError stay false with data still
+    // undefined, which crashed ListPage's `listQuery.data!` (tasks/06). 'always' keeps this query
+    // consistent with the mutations: let it attempt and fail into the existing error branch.
+    networkMode: 'always',
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
 
+  // A second notice arriving before the first's 4s elapses used to be cut short by the first
+  // notice's own stale timer (no handle was kept, so nothing cleared it) — tasks/06. Keeping the
+  // handle and clearing it before scheduling a new one means each notice always gets its full
+  // duration; the effect below also clears it on unmount.
+  const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const showNotice = (message: string) => {
+    clearTimeout(noticeTimeoutRef.current);
     setNotice(message);
-    window.setTimeout(() => setNotice(null), 4000);
+    noticeTimeoutRef.current = window.setTimeout(() => setNotice(null), 4000);
   };
+  useEffect(() => () => clearTimeout(noticeTimeoutRef.current), []);
 
   // See specs/05-sync-conflict-resolution.md's stale-write indicator: the server always applies
   // the write and just tells us whether it clobbered a change we hadn't seen yet. Soft signal
@@ -554,9 +567,21 @@ export function useList(listId: string | undefined) {
 
   // Deleting the whole list isn't routed through the outbox — it's destructive/irreversible, and
   // (unlike Todo/SubTask) List has no version column, so it sits outside the conflict/outbox
-  // model entirely. Requires being online, same as before.
+  // model entirely. Online-only is the right call, but the default networkMode: 'online' doesn't
+  // implement that — it *pauses* the mutation invisibly until connectivity returns, leaving the
+  // button stuck disabled and then firing a destructive action long after the user gave up
+  // (tasks/06). OFFLINE_AWARE + an explicit check makes this fail fast instead: the button
+  // re-enables immediately and the user is told why, rather than a confirm()-gated delete queued
+  // somewhere it can't be seen or cancelled.
   const deleteList = useMutation({
-    mutationFn: () => api.deleteList(listId!),
+    ...OFFLINE_AWARE,
+    mutationFn: () => {
+      if (connectionStatus.getStatus() !== 'online') {
+        showNotice("Can't delete while offline");
+        throw new Error('Offline');
+      }
+      return api.deleteList(listId!);
+    },
     onSuccess: () => {
       queryClient.removeQueries({ queryKey });
       navigate('/');

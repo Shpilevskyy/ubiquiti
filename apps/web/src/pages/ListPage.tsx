@@ -49,8 +49,18 @@ export function ListPage() {
       </main>
     );
   }
+  // Defensive, not just belt-and-braces: a non-null assertion on query data is never safe across
+  // every TanStack state (tasks/06) — isLoading/isError can both be false with data still
+  // undefined, and asserting past that crashed this page with a blank screen.
+  if (!listQuery.data) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-500">Loading…</p>
+      </main>
+    );
+  }
 
-  const { list, todos } = listQuery.data!;
+  const { list, todos } = listQuery.data;
   const totalCents = listTotalCents(todos);
 
   function handleAddTodo(event: FormEvent) {
