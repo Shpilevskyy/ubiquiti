@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { Server as SocketIOServer } from 'socket.io';
 import { CLIENT_ID_HEADER, type HelloResponse } from '@ubiquiti-todo/shared';
 import { listsRoutes } from './routes/lists.js';
@@ -20,6 +21,14 @@ const app = Fastify({ logger: true });
 // handlers into each route's context at registration time, so routes added earlier would
 // otherwise keep the default handlers instead of ours.
 registerErrorHandling(app, { isProduction });
+
+// Lets routes declare `schema: { body, params }` using the zod schemas from packages/shared
+// directly instead of a hand-rolled `Schema.safeParse` + manual 400 in every handler (tasks/09).
+// A validation failure throws a standard Fastify validation error (statusCode 400), which falls
+// through to the generic status→code mapping in errorHandler.ts above — no special-casing needed
+// to keep the unified error shape.
+app.setValidatorCompiler(validatorCompiler);
+app.setSerializerCompiler(serializerCompiler);
 
 // Reads the client-identity header once per request instead of every route handler repeating the
 // same `request.headers[CLIENT_ID_HEADER] as string | undefined` cast (tasks/09).

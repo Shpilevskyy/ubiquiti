@@ -123,6 +123,17 @@ export const UpdateSubTaskBodySchema = SubTaskMutableSchema.partial().extend({
 });
 export type UpdateSubTaskBody = z.infer<typeof UpdateSubTaskBodySchema>;
 
+// Route param schemas (tasks/09) — the body schemas above were always validated; :listId/:todoId/
+// :subtaskId were typed as `string` and passed straight to Prisma with no format check at all.
+export const ListParamsSchema = z.object({ listId: z.uuid() });
+export type ListParams = z.infer<typeof ListParamsSchema>;
+
+export const TodoParamsSchema = z.object({ listId: z.uuid(), todoId: z.uuid() });
+export type TodoParams = z.infer<typeof TodoParamsSchema>;
+
+export const SubTaskParamsSchema = z.object({ listId: z.uuid(), todoId: z.uuid(), subtaskId: z.uuid() });
+export type SubTaskParams = z.infer<typeof SubTaskParamsSchema>;
+
 export interface GetListResponse {
   list: List;
   todos: Todo[];

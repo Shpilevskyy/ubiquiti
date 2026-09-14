@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   CreateSubTaskBodySchema,
   SOCKET_EVENTS,
+  SubTaskParamsSchema,
+  TodoParamsSchema,
   UpdateSubTaskBodySchema,
   type SubTaskCreatedPayload,
   type SubTaskDeletedPayload,
@@ -12,31 +15,29 @@ import { detectConflict } from '../conflict.js';
 import { serializeSubTask } from '../serializers.js';
 
 export async function subtasksRoutes(app: FastifyInstance) {
-  app.post<{ Params: { listId: string; todoId: string } }>(
-    '/api/lists/:listId/todos/:todoId/subtasks',
-    async (request, reply) => {
-      const body = CreateSubTaskBodySchema.safeParse(request.body);
-      if (!body.success) {
-        return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
-      }
+  const server = app.withTypeProvider<ZodTypeProvider>();
 
+  server.post(
+    '/api/lists/:listId/todos/:todoId/subtasks',
+    { schema: { params: TodoParamsSchema, body: CreateSubTaskBodySchema } },
+    async (request, reply) => {
       const todo = await prisma.todo.findUnique({ where: { id: request.params.todoId } });
       if (!todo) {
         return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
       }
 
-      const existing = await prisma.subTask.findUnique({ where: { id: body.data.id } });
+      const existing = await prisma.subTask.findUnique({ where: { id: request.body.id } });
       if (existing) {
         return { subtask: serializeSubTask(existing) };
       }
 
       const subtask = await prisma.subTask.create({
         data: {
-          id: body.data.id,
+          id: request.body.id,
           todoId: request.params.todoId,
-          title: body.data.title,
-          position: body.data.position,
-          costCents: body.data.costCents ?? null,
+          title: request.body.title,
+          position: request.body.position,
+          costCents: request.body.costCents ?? null,
         },
       });
       const serialized = serializeSubTask(subtask);
@@ -51,15 +52,11 @@ export async function subtasksRoutes(app: FastifyInstance) {
     },
   );
 
-  app.patch<{ Params: { listId: string; todoId: string; subtaskId: string } }>(
+  server.patch(
     '/api/lists/:listId/todos/:todoId/subtasks/:subtaskId',
+    { schema: { params: SubTaskParamsSchema, body: UpdateSubTaskBodySchema } },
     async (request, reply) => {
-      const body = UpdateSubTaskBodySchema.safeParse(request.body);
-      if (!body.success) {
-        return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
-      }
-
-      const { base, ...updateData } = body.data;
+      const { base, ...updateData } = request.body;
 
       // See the identical comment in todos.ts's PATCH handler: one transaction scoped to the
       // parent todoId fixes both the wrong-room broadcast (tasks/04 bug 1) and the TOCTOU conflict
@@ -90,8 +87,9 @@ export async function subtasksRoutes(app: FastifyInstance) {
     },
   );
 
-  app.delete<{ Params: { listId: string; todoId: string; subtaskId: string } }>(
+  server.delete(
     '/api/lists/:listId/todos/:todoId/subtasks/:subtaskId',
+    { schema: { params: SubTaskParamsSchema } },
     async (request, reply) => {
       // See the identical comment in todos.ts's DELETE handler: a subtask under a *different*
       // todo 404s (tasks/04 bug 1); one that doesn't exist at all stays a 204 idempotent retry.

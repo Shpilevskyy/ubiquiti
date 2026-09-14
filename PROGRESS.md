@@ -610,6 +610,32 @@ reproducing the exact failure mode before and after.
       todo added in one tab broadcasts live to the other (plus its presence avatar), with no
       self-echo errors in the originating tab's console. Clean full build.
 
+- [x] Schema-driven request validation via `fastify-type-provider-zod`, completing
+      [tasks/09-server-route-boilerplate.md](tasks/09-server-route-boilerplate.md) (item 2; items 1
+      and 3 landed in the previous entry). This was flagged as the riskiest part of the task since
+      any validation library that ships its own error serializer could silently break the specced
+      unified error shape.
+      **New param schemas** in `packages/shared`: `ListParamsSchema`/`TodoParamsSchema`/
+      `SubTaskParamsSchema`, each `z.uuid()` per segment — closes a real gap the review found:
+      `listId`/`todoId`/`subtaskId` were typed as `string` via Fastify's generic type parameter
+      (TypeScript-only, no runtime check) and passed straight to Prisma, so a malformed id either
+      500'd or silently missed rather than 400ing.
+      **Wiring**: `app.setValidatorCompiler`/`setSerializerCompiler` (from the library) set once in
+      `index.ts` before routes are registered; each route file does `app.withTypeProvider<ZodTypeProvider>()`
+      once and passes the shared zod schemas directly as `schema: { params, body }` on each route,
+      giving typed, pre-validated `request.body`/`request.params` with no generic type parameter
+      needed. All 8 hand-rolled `Schema.safeParse(request.body)` + manual-400 blocks are gone.
+      **Verified the error-shape risk directly**: a validation failure throws Fastify's own
+      validation error (statusCode 400) rather than a custom-formatted one, which falls straight
+      into the existing generic status→code mapping in `errorHandler.ts` — no special-casing
+      needed, and confirmed with curl that malformed JSON, invalid bodies, and (new) non-uuid path
+      params all still return the exact `{ error: { code, message } }` shape, just with more
+      readable messages (Fastify's own formatter, e.g. `"params/listId Invalid UUID"`) than the old
+      raw zod-issues JSON dump. Full curl pass across every endpoint (create/get/patch/delete for
+      lists, todos, subtasks; valid and invalid bodies; valid and non-uuid params; idempotent
+      double-delete; unknown route) plus re-running `scripts/verify-conflict.py`'s 10 assertions
+      against a freshly built server instance — all pass unchanged. Clean full build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

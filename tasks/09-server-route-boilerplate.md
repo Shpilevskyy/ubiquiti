@@ -1,8 +1,6 @@
 # 09 — `request.clientId`, schema-driven validation, central P2025 handling
 
-**Status:** in progress — items 1 (`request.clientId`) and 3 (central P2025 + status→code mapping)
-done; item 2 (schema-driven validation via `fastify-type-provider-zod`, incl. uuid param
-validation) still to come, as its own follow-up diff given it's the riskiest part.
+**Status:** done
 **Size:** M
 **Depends on:** [04](04-route-scoping-and-conflict-check.md) (that task rewrites these same
 handlers; do the correctness work first, then clean up around it)

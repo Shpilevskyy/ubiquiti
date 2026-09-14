@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   CreateTodoBodySchema,
+  ListParamsSchema,
   SOCKET_EVENTS,
+  TodoParamsSchema,
   UpdateTodoBodySchema,
   type TodoDeletedPayload,
 } from '@ubiquiti-todo/shared';
@@ -10,55 +13,49 @@ import { detectConflict } from '../conflict.js';
 import { serializeTodo } from '../serializers.js';
 
 export async function todosRoutes(app: FastifyInstance) {
-  app.post<{ Params: { listId: string } }>('/api/lists/:listId/todos', async (request, reply) => {
-    const body = CreateTodoBodySchema.safeParse(request.body);
-    if (!body.success) {
-      return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
-    }
+  const server = app.withTypeProvider<ZodTypeProvider>();
 
-    const list = await prisma.list.findUnique({ where: { id: request.params.listId } });
-    if (!list) {
-      return reply.code(404).send({ error: { code: 'not_found', message: 'List not found' } });
-    }
-
-    const existing = await prisma.todo.findUnique({
-      where: { id: body.data.id },
-      include: { subtasks: { orderBy: { position: 'asc' } } },
-    });
-    if (existing) {
-      return { todo: serializeTodo(existing) };
-    }
-
-    const todo = await prisma.todo.create({
-      data: {
-        id: body.data.id,
-        listId: request.params.listId,
-        title: body.data.title,
-        position: body.data.position,
-        costCents: body.data.costCents ?? null,
-        descriptionMd: body.data.descriptionMd ?? null,
-      },
-      include: { subtasks: { orderBy: { position: 'asc' } } },
-    });
-    const serialized = serializeTodo(todo);
-    app.broadcaster.broadcastToList(
-      request.params.listId,
-      request.clientId,
-      SOCKET_EVENTS.TODO_CREATED,
-      { todo: serialized },
-    );
-    return { todo: serialized };
-  });
-
-  app.patch<{ Params: { listId: string; todoId: string } }>(
-    '/api/lists/:listId/todos/:todoId',
+  server.post(
+    '/api/lists/:listId/todos',
+    { schema: { params: ListParamsSchema, body: CreateTodoBodySchema } },
     async (request, reply) => {
-      const body = UpdateTodoBodySchema.safeParse(request.body);
-      if (!body.success) {
-        return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
+      const list = await prisma.list.findUnique({ where: { id: request.params.listId } });
+      if (!list) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'List not found' } });
       }
 
-      const { base, ...updateData } = body.data;
+      const existing = await prisma.todo.findUnique({
+        where: { id: request.body.id },
+        include: { subtasks: { orderBy: { position: 'asc' } } },
+      });
+      if (existing) {
+        return { todo: serializeTodo(existing) };
+      }
+
+      const todo = await prisma.todo.create({
+        data: {
+          id: request.body.id,
+          listId: request.params.listId,
+          title: request.body.title,
+          position: request.body.position,
+          costCents: request.body.costCents ?? null,
+          descriptionMd: request.body.descriptionMd ?? null,
+        },
+        include: { subtasks: { orderBy: { position: 'asc' } } },
+      });
+      const serialized = serializeTodo(todo);
+      app.broadcaster.broadcastToList(request.params.listId, request.clientId, SOCKET_EVENTS.TODO_CREATED, {
+        todo: serialized,
+      });
+      return { todo: serialized };
+    },
+  );
+
+  server.patch(
+    '/api/lists/:listId/todos/:todoId',
+    { schema: { params: TodoParamsSchema, body: UpdateTodoBodySchema } },
+    async (request, reply) => {
+      const { base, ...updateData } = request.body;
 
       // Read + write in one transaction, both scoped to the parent listId: a mismatched listId
       // must 404 rather than mutate the row and broadcast to the wrong room (tasks/04 bug 1), and
@@ -95,8 +92,9 @@ export async function todosRoutes(app: FastifyInstance) {
     },
   );
 
-  app.delete<{ Params: { listId: string; todoId: string } }>(
+  server.delete(
     '/api/lists/:listId/todos/:todoId',
+    { schema: { params: TodoParamsSchema } },
     async (request, reply) => {
       // A todo that exists under a *different* list is a genuine mismatch (tasks/04 bug 1) and
       // 404s rather than silently no-op'ing; a todo that doesn't exist at all is a legitimate

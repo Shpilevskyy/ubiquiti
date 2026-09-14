@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   CreateListBodySchema,
+  ListParamsSchema,
   SOCKET_EVENTS,
   UpdateListBodySchema,
   type GetListResponse,
@@ -11,26 +13,23 @@ import { prisma } from '../prisma.js';
 import { serializeList, serializeTodo } from '../serializers.js';
 
 export async function listsRoutes(app: FastifyInstance) {
-  app.post('/api/lists', async (request, reply) => {
-    const body = CreateListBodySchema.safeParse(request.body);
-    if (!body.success) {
-      return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
-    }
+  const server = app.withTypeProvider<ZodTypeProvider>();
 
-    const list = await prisma.list.create({ data: { title: body.data.title } });
+  server.post('/api/lists', { schema: { body: CreateListBodySchema } }, async (request) => {
+    const list = await prisma.list.create({ data: { title: request.body.title } });
     return { list: serializeList(list) };
   });
 
   // No user accounts, so there's no concept of "your lists" — this just lists every list that
   // exists. Deliberately public: fine for a demo app, deviates from specs/00-overview.md's
   // access-by-link scoping, see PROGRESS.md.
-  app.get('/api/lists', async () => {
+  server.get('/api/lists', async () => {
     const lists = await prisma.list.findMany({ orderBy: { updatedAt: 'desc' } });
     const response: GetListsResponse = { lists: lists.map(serializeList) };
     return response;
   });
 
-  app.get<{ Params: { listId: string } }>('/api/lists/:listId', async (request, reply) => {
+  server.get('/api/lists/:listId', { schema: { params: ListParamsSchema } }, async (request, reply) => {
     const list = await prisma.list.findUnique({
       where: { id: request.params.listId },
       include: {
@@ -52,26 +51,25 @@ export async function listsRoutes(app: FastifyInstance) {
     return response;
   });
 
-  app.patch<{ Params: { listId: string } }>('/api/lists/:listId', async (request, reply) => {
-    const body = UpdateListBodySchema.safeParse(request.body);
-    if (!body.success) {
-      return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
-    }
+  server.patch(
+    '/api/lists/:listId',
+    { schema: { params: ListParamsSchema, body: UpdateListBodySchema } },
+    async (request) => {
+      // A missing list surfaces as Prisma's P2025 and is mapped to 404 centrally in
+      // errorHandler.ts (tasks/09) rather than a try/catch here.
+      const list = await prisma.list.update({
+        where: { id: request.params.listId },
+        data: request.body,
+      });
+      const serialized = serializeList(list);
+      app.broadcaster.broadcastToList(list.id, request.clientId, SOCKET_EVENTS.LIST_UPDATED, {
+        list: serialized,
+      });
+      return { list: serialized };
+    },
+  );
 
-    // A missing list surfaces as Prisma's P2025 and is mapped to 404 centrally in
-    // errorHandler.ts (tasks/09) rather than a try/catch here.
-    const list = await prisma.list.update({
-      where: { id: request.params.listId },
-      data: body.data,
-    });
-    const serialized = serializeList(list);
-    app.broadcaster.broadcastToList(list.id, request.clientId, SOCKET_EVENTS.LIST_UPDATED, {
-      list: serialized,
-    });
-    return { list: serialized };
-  });
-
-  app.delete<{ Params: { listId: string } }>('/api/lists/:listId', async (request, reply) => {
+  server.delete('/api/lists/:listId', { schema: { params: ListParamsSchema } }, async (request, reply) => {
     // deleteMany, not delete, so this is idempotent (deleting an already-gone list still 204s) —
     // same convention as the todo/subtask deletes, see specs/03-api-rest.md#idempotency-via-client-generated-ids.
     // Todos/SubTasks cascade via the schema's onDelete: Cascade, no manual cleanup needed.
