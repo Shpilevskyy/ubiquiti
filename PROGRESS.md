@@ -1092,6 +1092,58 @@ reproducing the exact failure mode before and after.
       computation changed, already verified through the same `reorderTodo`/`reorderSubTask`
       mutation code paths via direct API calls).
 
+- [x] Transaction boundaries on the two create routes —
+      [tasks/19-transaction-boundaries.md](tasks/19-transaction-boundaries.md). `prisma.$transaction`
+      appeared zero times in the codebase before tasks/04; this closes the other gap that review
+      found: `POST /api/lists/:listId/todos` and `POST /api/lists/:listId/todos/:todoId/subtasks`
+      were each three sequential round trips (parent-exists check, idempotency check, create), so
+      two clients replaying the same queued create concurrently — a real scenario, the outbox
+      retries — could both see `existing === null` and both attempt the create, the second hitting
+      an unhandled unique-constraint violation (P2002) that fell through to a generic 500 instead of
+      the idempotent 200 the design intends.
+      **The task's own prescribed fix (`prisma.todo.upsert`) turned out not to actually work**:
+      verified by turning on Prisma's query logger before trusting it, `upsert` here compiles to
+      `BEGIN; SELECT id WHERE id = $1; INSERT; COMMIT` — a hand-rolled check-then-insert inside a
+      transaction, not a native `INSERT ... ON CONFLICT DO UPDATE` — so it raced exactly like the
+      original code under genuine concurrency. Confirmed directly: two real concurrent POSTs with
+      `prisma.todo.upsert` in place still produced one `200` and one `500` with Prisma's own P2002
+      surfacing as the error. Root-caused before writing the actual fix, not just noticed and
+      patched over.
+      **Actual fix**: a bare `prisma.todo.create`/`prisma.subTask.create` racing on the database's
+      own unique constraint on `id` — genuinely atomic, since Postgres guarantees exactly one of two
+      concurrent inserts for the same id can succeed — with the loser catching `P2002` and
+      re-fetching the winner's now-committed row via `findUniqueOrThrow` instead of erroring. Three
+      queries become one on the fast path (a fresh create) and two on the losing side of a genuine
+      race (failed insert + fetch), matching the task's own framing without relying on Prisma
+      upsert's incidental (and here, absent) atomicity.
+      **P2003 → 404**: the missing-parent case (deleted/nonexistent list or todo) now surfaces as a
+      foreign-key violation on the insert rather than a separate existence check; mapped to 404
+      centrally in [errorHandler.ts](apps/server/src/errorHandler.ts) alongside the existing P2025
+      mapping, same unified error shape.
+      **Broadcast on the idempotent-retry path too**: previously the "already exists" branch
+      returned silently with no broadcast; now every successful response broadcasts, including a
+      sequential-retry idempotent return. Verified this is harmless, not just assumed: both
+      `TODO_CREATED` and `SUBTASK_CREATED` handlers in
+      [useListSocket.ts](apps/web/src/hooks/useListSocket.ts) already dedupe by id before applying
+      to the cache.
+      **`DELETE /api/lists/:listId`** — already a single atomic `deleteMany`, left untouched per the
+      task's own scope discipline note (no transaction added where one statement already suffices).
+      **Found and fixed along the way**: [scripts/verify-conflict.py](scripts/verify-conflict.py)
+      had been silently broken since tasks/18 (fractional string indexing) landed — it still POSTed
+      `"position": 1` (a number), which the schema has required as a string since that task, so
+      every create in the script 400'd and every assertion after it compared against `None`. Fixed
+      both call sites to `"position": "a0"`; unrelated to this task's actual change but needed to
+      run its own verification step, and is exactly the kind of stale-script drift worth catching
+      rather than working around.
+      **Verified**: fired real concurrent duplicate POSTs (not sequential) against a running local
+      server for both todos and subtasks, 5 pairs each — all 10 requests returned `200`, and a direct
+      `SELECT ... GROUP BY id` against Postgres confirmed exactly one row per id, zero duplicates and
+      zero 500s (the exact scenario that motivated this task). Confirmed the missing-parent 404 for
+      both routes. Confirmed the pre-existing sequential-idempotency path (same id POSTed twice, not
+      concurrently) still returns the same row unchanged. Re-ran the now-fixed
+      `scripts/verify-conflict.py` — all 10 assertions pass. Full monorepo build/typecheck/lint
+      clean.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
@@ -1124,16 +1176,10 @@ A second pass on 2026-09-14 reviewed the *architecture* rather than the code (`t
 Its conclusion was that the design is sound and worth keeping — single origin serving API + WS +
 static, `packages/shared` as the hand-written wire contract, REST for writes with WS for fanout,
 client-generated ids, server-authoritative outbox over a CRDT. Three findings were fixed immediately
-(see the top of Completed). The rest are recorded as tasks, of which two are documentation-only and
-two are deliberately parked with trigger conditions:
-- `tasks/17`, `tasks/21` — record the reasoning behind two decisions that currently read as
-  defaults: drag positions computed client-side (value) rather than server-side (intent), and
-  Socket.IO rather than SSE. Both ~10 minutes, no code.
-- `tasks/18` — string fractional indexing instead of `position: Float`, which removes the
-  float-precision collision specs/08 defers a fallback for rather than building that fallback.
-- `tasks/19` — transaction boundaries; also collapses the three-query create into one `upsert`.
-- `tasks/20` (service layer) and `tasks/22` (Redis adapter) — **parked**, not scheduled. Both are
-  correct-at-larger-scale and wrong-at-this-scale; each file lists what would un-park it.
+(see the top of Completed). The rest were recorded as tasks 17-22; 17, 18, 19, and 21 have since
+landed (see Completed above) — `tasks/20` (service layer) and `tasks/22` (Redis adapter) are the
+only ones remaining, and both are **parked**, not scheduled: both are correct-at-larger-scale and
+wrong-at-this-scale; each file lists what would un-park it.
 
 Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
 - [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)

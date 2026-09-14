@@ -1,6 +1,6 @@
 # 19 — Add transaction boundaries and collapse redundant round trips
 
-**Status:** not started
+**Status:** done
 **Size:** S–M
 **Depends on:** [04](04-route-scoping-and-conflict-check.md) (its Bug 2 fix is the single most
 important transaction in the codebase; do it there, then apply the same treatment to the rest here)

@@ -29,6 +29,13 @@ export function registerErrorHandling(app: FastifyInstance, options: { isProduct
       return reply.code(404).send({ error: { code: 'not_found', message: 'Not found' } });
     }
 
+    // The create routes (tasks/19) upsert directly on a client-generated id instead of checking
+    // the parent exists first — a missing parent (deleted list/todo) surfaces as a foreign-key
+    // violation on the insert rather than a row that fails to be found beforehand.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      return reply.code(404).send({ error: { code: 'not_found', message: 'Not found' } });
+    }
+
     const statusCode = error.statusCode ?? 500;
 
     if (statusCode >= 500) {

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { Prisma } from '@prisma/client';
 import {
   CreateSubTaskBodySchema,
   SOCKET_EVENTS,
@@ -20,27 +21,31 @@ export async function subtasksRoutes(app: FastifyInstance) {
   server.post(
     '/api/lists/:listId/todos/:todoId/subtasks',
     { schema: { params: TodoParamsSchema, body: CreateSubTaskBodySchema } },
-    async (request, reply) => {
-      const todo = await prisma.todo.findUnique({ where: { id: request.params.todoId } });
-      if (!todo) {
-        return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
-      }
-
-      const existing = await prisma.subTask.findUnique({ where: { id: request.body.id } });
-      if (existing) {
-        return { subtask: serializeSubTask(existing) };
-      }
-
-      const subtask = await prisma.subTask.create({
-        data: {
-          id: request.body.id,
-          todoId: request.params.todoId,
-          title: request.body.title,
-          position: request.body.position,
-          costCents: request.body.costCents ?? null,
-        },
-      });
+    async (request) => {
+      // Same fix as todos.ts's POST, including the same upsert-isn't-actually-atomic finding —
+      // see tasks/19 and the comment there. A bare `create` racing on the database's own unique
+      // constraint on `id`, with the loser catching P2002 and re-fetching, is what's genuinely
+      // atomic. A deleted/nonexistent todo surfaces as a foreign-key violation (P2003), mapped to
+      // 404 centrally in errorHandler.ts.
+      const subtask = await prisma.subTask
+        .create({
+          data: {
+            id: request.body.id,
+            todoId: request.params.todoId,
+            title: request.body.title,
+            position: request.body.position,
+            costCents: request.body.costCents ?? null,
+          },
+        })
+        .catch((error) => {
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+            throw error;
+          }
+          return prisma.subTask.findUniqueOrThrow({ where: { id: request.body.id } });
+        });
       const serialized = serializeSubTask(subtask);
+      // Broadcasting on the idempotent-retry path too is harmless: useListSocket's
+      // SUBTASK_CREATED handler already dedupes by id before applying.
       const payload: SubTaskCreatedPayload = { todoId: request.params.todoId, subtask: serialized };
       app.broadcaster.broadcastToList(
         request.params.listId,

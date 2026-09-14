@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { Prisma } from '@prisma/client';
 import {
   CreateTodoBodySchema,
   ListParamsSchema,
@@ -18,32 +19,39 @@ export async function todosRoutes(app: FastifyInstance) {
   server.post(
     '/api/lists/:listId/todos',
     { schema: { params: ListParamsSchema, body: CreateTodoBodySchema } },
-    async (request, reply) => {
-      const list = await prisma.list.findUnique({ where: { id: request.params.listId } });
-      if (!list) {
-        return reply.code(404).send({ error: { code: 'not_found', message: 'List not found' } });
-      }
-
-      const existing = await prisma.todo.findUnique({
-        where: { id: request.body.id },
-        include: { subtasks: { orderBy: { position: 'asc' } } },
-      });
-      if (existing) {
-        return { todo: serializeTodo(existing) };
-      }
-
-      const todo = await prisma.todo.create({
-        data: {
-          id: request.body.id,
-          listId: request.params.listId,
-          title: request.body.title,
-          position: request.body.position,
-          costCents: request.body.costCents ?? null,
-          descriptionMd: request.body.descriptionMd ?? null,
-        },
-        include: { subtasks: { orderBy: { position: 'asc' } } },
-      });
+    async (request) => {
+      // Replaces three sequential queries (parent-exists check, idempotency check, create) with
+      // one attempt at the create — see tasks/19. `prisma.todo.upsert` looked like the obvious fix
+      // here but turned out not to be atomic: verified by query-logging it, it compiles to
+      // BEGIN; SELECT id; INSERT; COMMIT rather than a native `INSERT ... ON CONFLICT`, so it still
+      // raced under genuine concurrency (confirmed by firing two real concurrent requests — the
+      // loser got Prisma's own P2002, not the idempotent 200). A bare `create` racing on the
+      // database's own unique constraint is what's actually atomic: exactly one of two concurrent
+      // inserts for the same id can succeed, full stop, so the loser's catch below is guaranteed to
+      // find the winner's row already committed. A deleted/nonexistent list surfaces as a
+      // foreign-key violation (P2003), mapped to 404 centrally in errorHandler.ts.
+      const todoInclude = { subtasks: { orderBy: { position: 'asc' as const } } };
+      const todo = await prisma.todo
+        .create({
+          data: {
+            id: request.body.id,
+            listId: request.params.listId,
+            title: request.body.title,
+            position: request.body.position,
+            costCents: request.body.costCents ?? null,
+            descriptionMd: request.body.descriptionMd ?? null,
+          },
+          include: todoInclude,
+        })
+        .catch((error) => {
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+            throw error;
+          }
+          return prisma.todo.findUniqueOrThrow({ where: { id: request.body.id }, include: todoInclude });
+        });
       const serialized = serializeTodo(todo);
+      // Broadcasting on the idempotent-retry path too (not just a genuine create) is harmless:
+      // useListSocket's TODO_CREATED handler already dedupes by id before applying.
       app.broadcaster.broadcastToList(request.params.listId, request.clientId, SOCKET_EVENTS.TODO_CREATED, {
         todo: serialized,
       });

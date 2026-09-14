@@ -44,7 +44,7 @@ def check(label, actual, expected):
 _, created = req("POST", "/lists", {"title": "conflict regression"})
 lid = created["list"]["id"]
 tid = str(uuid.uuid4())
-req("POST", f"/lists/{lid}/todos", {"id": tid, "title": "orig", "position": 1})
+req("POST", f"/lists/{lid}/todos", {"id": tid, "title": "orig", "position": "a0"})
 P = f"/lists/{lid}/todos/{tid}"
 
 print("todo conflict signal")
@@ -71,7 +71,7 @@ check("agreeing base -> no conflict", d["hadConflict"], False)
 
 print("subtask conflict signal")
 sid = str(uuid.uuid4())
-req("POST", f"{P}/subtasks", {"id": sid, "title": "sub", "position": 1})
+req("POST", f"{P}/subtasks", {"id": sid, "title": "sub", "position": "a0"})
 SP = f"{P}/subtasks/{sid}"
 req("PATCH", SP, {"title": "renamed by someone else"})
 _, d = req("PATCH", SP, {"done": True, "base": {"done": False}})
