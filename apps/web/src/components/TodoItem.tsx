@@ -15,6 +15,7 @@ import { formatCents, subtaskSubtotalCents } from '../lib/cost';
 import { computeReorderPosition } from '../lib/position';
 import { CostInput } from './CostInput';
 import { SubtaskItem } from './SubtaskItem';
+import { SubtaskProgress } from './SubtaskProgress';
 import { TodoDescription } from './TodoDescription';
 
 interface TodoItemProps {
@@ -83,6 +84,10 @@ export function TodoItem({
         <span className={`flex-1 text-sm text-slate-900 ${todo.done ? 'text-slate-400 line-through' : ''}`}>
           {todo.title}
         </span>
+        <SubtaskProgress
+          done={todo.subtasks.filter((subtask) => subtask.done).length}
+          total={todo.subtasks.length}
+        />
         <CostInput costCents={todo.costCents} onSave={onUpdateCost} />
         <button
           onClick={onDelete}

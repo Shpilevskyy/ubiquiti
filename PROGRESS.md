@@ -369,6 +369,17 @@ reproducing the exact failure mode before and after.
       optimistic, no request sent), and confirmed it reached the server once the existing
       poll-based flush ran — same outbox path as every other field. Clean full build.
 
+- [x] Subtask progress indicator — [tasks/02-subtask-progress.md](tasks/02-subtask-progress.md):
+      new `SubtaskProgress` component (`apps/web/src/components/SubtaskProgress.tsx`), a quiet
+      `done/total` count with a thin bar, rendered in `TodoItem`'s header row next to the title.
+      Takes plain `done`/`total` counts (derived in `TodoItem` from `todo.subtasks`) rather than
+      the subtasks themselves, per the task's preference — keeps the component trivial and needs
+      no state or query of its own, since `todo.subtasks` is already kept current by both
+      optimistic writes and realtime broadcasts. Renders nothing for a todo with no subtasks.
+      Browser-verified: added two subtasks (`0/2`), toggled one in the same tab (instant `1/2`),
+      toggled the other from a second tab (`2/2` live, no reload), deleted a subtask (denominator
+      dropped to `1/1`), deleted the last one (indicator disappeared entirely). Clean web build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

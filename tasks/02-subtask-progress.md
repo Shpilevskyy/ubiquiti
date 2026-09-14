@@ -1,6 +1,6 @@
 # 02 — Subtask progress indicator
 
-**Status:** not started
+**Status:** done — see PROGRESS.md Completed
 **Size:** S
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -38,6 +38,6 @@ component in its component-test list — it was planned and never built.
 
 ## Done when
 
-- [ ] Each todo with subtasks shows done/total progress
-- [ ] Updates on optimistic, realtime, and refetch paths
-- [ ] Absent for todos with no subtasks
+- [x] Each todo with subtasks shows done/total progress
+- [x] Updates on optimistic, realtime, and refetch paths
+- [x] Absent for todos with no subtasks
