@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   CreateListBodySchema,
   ListParamsSchema,
+  ListsQuerySchema,
   SOCKET_EVENTS,
   UpdateListBodySchema,
   type GetListResponse,
@@ -23,9 +24,19 @@ export async function listsRoutes(app: FastifyInstance) {
   // No user accounts, so there's no concept of "your lists" — this just lists every list that
   // exists. Deliberately public: fine for a demo app, deviates from specs/00-overview.md's
   // access-by-link scoping, see PROGRESS.md.
-  server.get('/api/lists', async () => {
-    const lists = await prisma.list.findMany({ orderBy: { updatedAt: 'desc' } });
-    const response: GetListsResponse = { lists: lists.map(serializeList) };
+  // Paginated (tasks/14): lists are publicly creatable with no ownership, so this grows without
+  // limit otherwise. Fetches one extra row to learn `hasMore` without a separate COUNT query.
+  server.get('/api/lists', { schema: { querystring: ListsQuerySchema } }, async (request) => {
+    const { limit, offset } = request.query;
+    const lists = await prisma.list.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: limit + 1,
+      skip: offset,
+    });
+    const response: GetListsResponse = {
+      lists: lists.slice(0, limit).map(serializeList),
+      hasMore: lists.length > limit,
+    };
     return response;
   });
 

@@ -953,6 +953,30 @@ reproducing the exact failure mode before and after.
       build end-to-end: list loads, no CSP console errors, and realtime still applies a spoofed
       second client's change live with no reload. Full build/typecheck/lint clean.
 
+- [x] `GET /api/lists` pagination (item 4/4 of
+      [tasks/14-server-hardening.md](tasks/14-server-hardening.md), completing the task). Lists
+      are publicly creatable with no ownership, so this endpoint returned *every list ever
+      created*, unbounded.
+      **Offset-based, not cursor-based**: simpler, and the task's own framing ("a capped list plus
+      'show more' is fine; it doesn't need infinite scroll") doesn't need cursor pagination's
+      extra correctness work. New `ListsQuerySchema`/`LISTS_PAGE_SIZE` (=50) in
+      [packages/shared](packages/shared/src/index.ts); the route
+      ([lists.ts](apps/server/src/routes/lists.ts)) fetches `limit + 1` rows to learn `hasMore`
+      without a separate `COUNT` query, `limit` capped at 100 by the schema.
+      **`LandingPage`**: "Show more" bumps a `limit` state value (starting at `LISTS_PAGE_SIZE`)
+      and re-fetches everything up to the new limit, rather than fetching-and-merging separate
+      pages — no client-side dedup/merge logic needed, always exactly the server's own order, and
+      correct by construction for the list counts this app deals with.
+      **Verified** directly against a live server: `?limit=3`/`?limit=3&offset=3` sliced correctly
+      and in the right order (confirmed against the unpaginated list), `hasMore` accurate at each
+      boundary, `?limit=9999` correctly 400s in the unified error shape (zod's `.max(100)` on the
+      querystring schema). Confirmed the web client sends `?limit=50` by default (network log) and
+      that the existing 14 test lists all still load with no regression. Did not click through
+      "Show more" itself in-browser — that would've meant creating 40+ throwaway lists in the
+      shared dev database just to cross the default page size, for a two-line, low-risk state
+      bump; the underlying pagination it depends on was verified directly instead.
+      Full build/typecheck/lint clean.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

@@ -1,7 +1,6 @@
 # 14 — Graceful shutdown, rate limit, helmet, body cap, real healthz, pagination
 
-**Status:** in progress — items 1 (graceful shutdown), 2 (rate limit/helmet/body cap/socket cap),
-and 3 (real healthz) landed, see PROGRESS.md; item 4 (`GET /api/lists` pagination) still to do
+**Status:** done — all four items landed, see PROGRESS.md
 **Size:** M
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -77,8 +76,9 @@ ownership, this grows without limit and is trivially abusable.
 - [x] Clean shutdown on SIGTERM/SIGINT, sockets and Prisma closed
 - [x] Rate limiting, security headers and a body cap in place (plus a Socket.IO connection cap,
       the task's own "also" item)
-- [x] All new error paths return the unified error shape — verified 413 and 429 directly
+- [x] All new error paths return the unified error shape — verified 413, 429, and the pagination
+      querystring's 400 directly
 - [x] `/healthz` reflects real database reachability
-- [ ] `GET /api/lists` paginated
-- [x] Production build verified, including static assets and realtime, for items 1-3; item 4
-      still needs its own pass once it lands
+- [x] `GET /api/lists` paginated — offset/limit, capped at 100, default 50, `hasMore` in the
+      response; `LandingPage` gained a "Show more" button
+- [x] Production build verified, including static assets, realtime, and pagination

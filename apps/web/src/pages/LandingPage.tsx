@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { LISTS_PAGE_SIZE } from '@ubiquiti-todo/shared';
 import { api } from '../lib/api';
 
 export function LandingPage() {
@@ -9,7 +10,12 @@ export function LandingPage() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const listsQuery = useQuery({ queryKey: ['lists'], queryFn: api.getLists });
+  // "Show more" grows the page size and re-fetches everything up to it, rather than fetching
+  // and merging separate pages — simpler, and correct by construction (always the server's own
+  // order, no client-side dedup/merge logic needed) for the list counts this app deals with
+  // (tasks/14: a capped list plus "Show more" is enough, no infinite scroll needed).
+  const [limit, setLimit] = useState(LISTS_PAGE_SIZE);
+  const listsQuery = useQuery({ queryKey: ['lists', limit], queryFn: () => api.getLists({ limit }) });
 
   const deleteList = useMutation({
     mutationFn: (listId: string) => api.deleteList(listId),
@@ -86,6 +92,15 @@ export function LandingPage() {
                 </li>
               ))}
             </ul>
+            {listsQuery.data.hasMore && (
+              <button
+                type="button"
+                onClick={() => setLimit((l) => l + LISTS_PAGE_SIZE)}
+                className="mt-3 text-xs font-medium text-indigo-600 hover:text-indigo-500"
+              >
+                Show more
+              </button>
+            )}
           </div>
         )}
       </div>

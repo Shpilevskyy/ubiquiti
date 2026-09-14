@@ -133,8 +133,21 @@ export interface GetListResponse {
   todos: Todo[];
 }
 
+// GET /api/lists pagination (tasks/14): lists are public with no ownership, so this endpoint was
+// unbounded and trivially abusable — anyone can create lists forever. Offset-based rather than
+// cursor-based: simpler, and a "Show more" button (rather than infinite scroll) is all the UI
+// needs, per the task's own framing.
+export const LISTS_PAGE_SIZE = 50;
+
+export const ListsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(LISTS_PAGE_SIZE),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type ListsQuery = z.infer<typeof ListsQuerySchema>;
+
 export interface GetListsResponse {
   lists: List[];
+  hasMore: boolean;
 }
 
 // The header a client sends on every mutation request so the server can exclude that client's

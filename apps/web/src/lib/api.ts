@@ -5,6 +5,7 @@ import {
   type GetListResponse,
   type GetListsResponse,
   type List,
+  type ListsQuery,
 } from '@ubiquiti-todo/shared';
 import { connectionStatus } from './connectionStatus';
 import { getMember } from './member';
@@ -69,7 +70,13 @@ export const api = {
   createList: (body: CreateListBody) =>
     request<{ list: List }>('/lists', { method: 'POST', body: JSON.stringify(body) }),
 
-  getLists: () => request<GetListsResponse>('/lists'),
+  getLists: (query: Partial<ListsQuery> = {}) => {
+    const params = new URLSearchParams();
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    const qs = params.toString();
+    return request<GetListsResponse>(`/lists${qs ? `?${qs}` : ''}`);
+  },
 
   getList: (listId: string) => request<GetListResponse>(`/lists/${listId}`),
 
