@@ -9,9 +9,13 @@
   "scripts": {
     "dev": "npm run build -w @ubiquiti-todo/shared && concurrently -k -n server,web -c blue,green \"npm run dev -w @ubiquiti-todo/server\" \"npm run dev -w @ubiquiti-todo/web\"",
     "build": "npm run build -w @ubiquiti-todo/shared && npm run build -w @ubiquiti-todo/web && npm run build -w @ubiquiti-todo/server",
-    "start": "npm run start -w @ubiquiti-todo/server"
+    "start": "npm run start -w @ubiquiti-todo/server",
+    "typecheck": "npm run build -w @ubiquiti-todo/shared && tsc --noEmit -p apps/server/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
+    "lint": "biome lint .",
+    "format": "biome format --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.13",
     "concurrently": "^10.0.5",
     "typescript": "^7.0.2"
   }
