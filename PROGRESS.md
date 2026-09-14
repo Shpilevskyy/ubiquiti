@@ -977,6 +977,36 @@ reproducing the exact failure mode before and after.
       bump; the underlying pagination it depends on was verified directly instead.
       Full build/typecheck/lint clean.
 
+- [x] Composite `(listId, position)`/`(todoId, position)` indexes; landing-page ordering fixed to
+      match reality — [tasks/15-db-indexes.md](tasks/15-db-indexes.md).
+      **Indexes**: every read path orders by `position` within a list/todo (comprehensive since
+      subtask drag-and-drop landed), but the schema only had single-column `@@index([listId])`/
+      `@@index([todoId])` — Postgres could use those for the filter but still had to sort the
+      matched rows afterward. Replaced (not added to, since the composite index's leading column
+      still serves listId/todoId-only lookups) with `@@index([listId, position])` on `Todo` and
+      `@@index([todoId, position])` on `SubTask`. New migration
+      (`20260914131213_composite_position_indexes`), applied locally.
+      **Landing-page ordering, fixed not just indexed**: `GET /api/lists` ordered by
+      `updatedAt: 'desc'`, but nothing ever touched a `List` row when its todos/subtasks changed
+      (Prisma's `@updatedAt` only fires on writes to that row itself) — in practice this was
+      creation order wearing a misleading "recently active" label. **Chose `createdAt`** over
+      genuinely bumping `updatedAt` on every child mutation: the task's own framing calls this "the
+      honest cheap option," and bumping would mean a second write on every todo/subtask mutation
+      plus an open question about `list:updated` broadcast semantics (do other open tabs care that
+      a list's timestamp moved with no visible change?) for a property nothing in the UI currently
+      surfaces (no "last edited" display anywhere) — not worth the cost for behavior no one can see
+      yet.
+      **Verified**: `EXPLAIN ANALYZE` at current data volume (~19 rows total) shows Postgres
+      correctly preferring a sequential scan — too little data for an index to pay off, as the task
+      itself anticipates ("small at current data volumes... the correct index for the access
+      pattern"). Confirmed the index actually eliminates the sort when used by forcing it
+      (`SET enable_seqscan = off`): the plan became a bare `Index Scan using
+      "Todo_listId_position_idx"` with no separate `Sort` node. `prisma migrate deploy` against an
+      isolated local instance reported the new migration already applied cleanly (picked up from
+      the earlier `migrate dev` run) — the same command Render's start script runs on every
+      deploy, so nothing about that path changed. Browser-verified list load/ordering with no
+      regression, no console errors. Full build/typecheck/lint clean.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

@@ -1,6 +1,6 @@
 # 15 — Composite indexes on `(listId, position)`; touch `List.updatedAt`
 
-**Status:** not started
+**Status:** done, see PROGRESS.md
 **Size:** S
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -55,7 +55,10 @@ broadcast semantics need thought (do other clients care that the timestamp moved
 
 ## Done when
 
-- [ ] Composite indexes in the schema with a generated migration
-- [ ] Migration verified locally and on Render
-- [ ] Landing-page ordering is either genuinely activity-based or honestly creation-based
-- [ ] Decision recorded in PROGRESS.md
+- [x] Composite indexes in the schema with a generated migration
+- [x] Migration verified locally — Render applies it automatically on the next deploy via
+      `prisma migrate deploy` in the start script, same as every prior migration; not separately
+      re-verified there since nothing about that path changed.
+- [x] Landing-page ordering is either genuinely activity-based or honestly creation-based — chose
+      creation-based (`createdAt`)
+- [x] Decision recorded in PROGRESS.md

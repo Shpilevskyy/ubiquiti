@@ -29,7 +29,11 @@ model Todo {
   updatedAt     DateTime  @updatedAt
   subtasks      SubTask[]
 
-  @@index([listId])
+  // Every read path orders by position within a list (tasks/15) — a composite index lets that
+  // ordering come straight off the index instead of Postgres sorting the matched rows after a
+  // listId-only lookup. Replaces the single-column index rather than adding to it: listId is the
+  // leading column, so this still serves listId-only lookups too.
+  @@index([listId, position])
 }
 
 model SubTask {
@@ -44,5 +48,6 @@ model SubTask {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([todoId])
+  // See Todo's [listId, position] index above — same reasoning, one level down.
+  @@index([todoId, position])
 }

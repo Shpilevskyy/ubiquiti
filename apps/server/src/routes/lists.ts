@@ -26,10 +26,16 @@ export async function listsRoutes(app: FastifyInstance) {
   // access-by-link scoping, see PROGRESS.md.
   // Paginated (tasks/14): lists are publicly creatable with no ownership, so this grows without
   // limit otherwise. Fetches one extra row to learn `hasMore` without a separate COUNT query.
+  // Ordered by createdAt, not updatedAt (tasks/15): nothing touches a List row when its todos or
+  // subtasks change (Prisma's @updatedAt only fires on writes to that row itself), so ordering by
+  // updatedAt implied a "most recently active" order this never actually delivered — in practice
+  // it was creation order wearing a misleading label. createdAt is the honest version of the same
+  // order, with no extra write on every todo/subtask mutation and no broadcast-semantics question
+  // about whether other clients care that a list's timestamp moved.
   server.get('/api/lists', { schema: { querystring: ListsQuerySchema } }, async (request) => {
     const { limit, offset } = request.query;
     const lists = await prisma.list.findMany({
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: limit + 1,
       skip: offset,
     });
