@@ -15,11 +15,11 @@ import { TodoItem } from './TodoItem';
 
 interface TodoListProps {
   todos: Todo[];
-  onToggleTodo: (todoId: string, done: boolean, baseVersion: number) => void;
-  onUpdateTodoDescription: (todoId: string, descriptionMd: string, baseVersion: number) => void;
+  onToggleTodo: (todoId: string, done: boolean) => void;
+  onUpdateTodoDescription: (todoId: string, descriptionMd: string, baseDescriptionMd: string | null) => void;
   onDeleteTodo: (todoId: string) => void;
   onReorderTodo: (todoId: string, position: number) => void;
-  onToggleSubTask: (todoId: string, subtaskId: string, done: boolean, baseVersion: number) => void;
+  onToggleSubTask: (todoId: string, subtaskId: string, done: boolean) => void;
   onDeleteSubTask: (todoId: string, subtaskId: string) => void;
   onReorderSubTask: (todoId: string, subtaskId: string, position: number) => void;
   newSubTaskTitles: Record<string, string>;
@@ -60,14 +60,12 @@ export function TodoList({
             <TodoItem
               key={todo.id}
               todo={todo}
-              onToggle={() => onToggleTodo(todo.id, !todo.done, todo.version)}
+              onToggle={() => onToggleTodo(todo.id, !todo.done)}
               onUpdateDescription={(descriptionMd) =>
-                onUpdateTodoDescription(todo.id, descriptionMd, todo.version)
+                onUpdateTodoDescription(todo.id, descriptionMd, todo.descriptionMd)
               }
               onDelete={() => onDeleteTodo(todo.id)}
-              onToggleSubTask={(subtaskId, done, baseVersion) =>
-                onToggleSubTask(todo.id, subtaskId, done, baseVersion)
-              }
+              onToggleSubTask={(subtaskId, done) => onToggleSubTask(todo.id, subtaskId, done)}
               onDeleteSubTask={(subtaskId) => onDeleteSubTask(todo.id, subtaskId)}
               onReorderSubTask={(subtaskId, position) => onReorderSubTask(todo.id, subtaskId, position)}
               newSubTaskTitle={newSubTaskTitles[todo.id] ?? ''}

@@ -9,6 +9,16 @@ This directory holds the spec-driven design docs for the project. Each doc cover
 implementation should follow what's written here, and any deviation should be reflected back
 into the relevant spec before/alongside the code change.
 
+**These docs are design intent, not an as-built record.** Where the implementation has diverged —
+deliberately or otherwise — [../PROGRESS.md](../PROGRESS.md) is the authoritative account of what
+was actually built and why, and [../tasks/](../tasks/) is the backlog of known gaps. Read a spec
+for the reasoning behind a decision; read PROGRESS.md for the current state of the code. Known
+standing divergences: the component tree in [07-frontend-architecture.md](07-frontend-architecture.md)
+lists components that were never split out (`ListHeader`, `ToastLayer`, `SubtaskProgress`,
+`AddSubtaskForm`, `AddTodoForm`) and a `lib/socket.ts` singleton that lives inside `useListSocket`
+instead; the Zustand dependency in [01-architecture.md](01-architecture.md) was never added
+(a `useSyncExternalStore` module singleton covers the same ground more cheaply).
+
 ## Library-use policy
 
 > "It's all right to use libraries that make your life easier, but please avoid anything that

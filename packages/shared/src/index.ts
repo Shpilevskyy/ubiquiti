@@ -75,15 +75,29 @@ export const CreateTodoBodySchema = z.object({
 });
 export type CreateTodoBody = z.infer<typeof CreateTodoBodySchema>;
 
-export const UpdateTodoBodySchema = z.object({
-  title: z.string().min(1).optional(),
-  done: z.boolean().optional(),
-  position: z.number().optional(),
-  costCents: z.number().int().nullable().optional(),
-  descriptionMd: z.string().nullable().optional(),
-  // The `version` the client last saw for this row — see specs/05-sync-conflict-resolution.md.
-  // Omitting it just skips the conflict check; the write still applies either way.
-  baseVersion: z.number().int().optional(),
+// The fields a PATCH is allowed to write. Declared once so `base` below can't drift out of
+// lockstep with the set of fields that are actually writable.
+const TodoMutableSchema = z.object({
+  title: z.string().min(1),
+  done: z.boolean(),
+  position: z.number(),
+  costCents: z.number().int().nullable(),
+  descriptionMd: z.string().nullable(),
+});
+export type TodoMutableFields = z.infer<typeof TodoMutableSchema>;
+
+export const UpdateTodoBodySchema = TodoMutableSchema.partial().extend({
+  // The values this client last saw for the fields it is writing — see
+  // specs/05-sync-conflict-resolution.md. The server compares them against the row's current
+  // values to decide whether this write actually clobbered someone else's change. Omitting it
+  // skips the check; the write applies either way.
+  //
+  // Deliberately *values*, not the row's `version`. A PATCH only writes the fields it names, so
+  // a row-level counter reports a conflict for any concurrent edit to the row — including one to
+  // a field this write never touches — and fires "also edited elsewhere" when nothing was lost.
+  // `version` is still on the row, but its job is broadcast ordering (see
+  // specs/04-realtime-protocol.md#ordering), not conflict detection.
+  base: TodoMutableSchema.partial().optional(),
 });
 export type UpdateTodoBody = z.infer<typeof UpdateTodoBodySchema>;
 
@@ -95,13 +109,17 @@ export const CreateSubTaskBodySchema = z.object({
 });
 export type CreateSubTaskBody = z.infer<typeof CreateSubTaskBodySchema>;
 
-export const UpdateSubTaskBodySchema = z.object({
-  title: z.string().min(1).optional(),
-  done: z.boolean().optional(),
-  position: z.number().optional(),
-  costCents: z.number().int().nullable().optional(),
-  // See UpdateTodoBodySchema.baseVersion above.
-  baseVersion: z.number().int().optional(),
+const SubTaskMutableSchema = z.object({
+  title: z.string().min(1),
+  done: z.boolean(),
+  position: z.number(),
+  costCents: z.number().int().nullable(),
+});
+export type SubTaskMutableFields = z.infer<typeof SubTaskMutableSchema>;
+
+export const UpdateSubTaskBodySchema = SubTaskMutableSchema.partial().extend({
+  // See UpdateTodoBodySchema.base above.
+  base: SubTaskMutableSchema.partial().optional(),
 });
 export type UpdateSubTaskBody = z.infer<typeof UpdateSubTaskBodySchema>;
 

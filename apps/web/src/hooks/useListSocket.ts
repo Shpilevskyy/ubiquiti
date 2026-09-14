@@ -92,9 +92,20 @@ export function useListSocket(listId: string | undefined): Member[] {
       );
     });
 
+    // Broadcasts are fire-and-forget from inside the REST handler, so two updates to the same row
+    // can arrive out of order. `version` is monotonic per row, so dropping any payload that isn't
+    // strictly newer than what's cached keeps this client from latching onto the older of the two
+    // — which nothing else would repair until the next reconcile.
     socket.on(SOCKET_EVENTS.TODO_UPDATED, ({ todo }: { todo: Todo }) => {
       queryClient.setQueryData<GetListResponse>(queryKey, (old) =>
-        old ? { ...old, todos: old.todos.map((existing) => (existing.id === todo.id ? todo : existing)) } : old,
+        old
+          ? {
+              ...old,
+              todos: old.todos.map((existing) =>
+                existing.id === todo.id && todo.version > existing.version ? todo : existing,
+              ),
+            }
+          : old,
       );
     });
 
@@ -110,10 +121,13 @@ export function useListSocket(listId: string | undefined): Member[] {
       });
     });
 
+    // Same ordering guard as TODO_UPDATED above.
     socket.on(SOCKET_EVENTS.SUBTASK_UPDATED, ({ todoId, subtask }: SubTaskUpdatedPayload) => {
       updateTodo(todoId, (todo) => {
         const index = todo.subtasks.findIndex((s: SubTask) => s.id === subtask.id);
-        if (index !== -1) todo.subtasks[index] = subtask;
+        if (index !== -1 && subtask.version > todo.subtasks[index].version) {
+          todo.subtasks[index] = subtask;
+        }
       });
     });
 

@@ -10,6 +10,7 @@ import {
   type SubTaskUpdatedPayload,
 } from '@ubiquiti-todo/shared';
 import { prisma } from '../prisma.js';
+import { detectConflict } from '../conflict.js';
 import { serializeSubTask } from '../serializers.js';
 
 export async function subtasksRoutes(app: FastifyInstance) {
@@ -60,17 +61,14 @@ export async function subtasksRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
       }
 
-      const { baseVersion, ...updateData } = body.data;
+      const { base, ...updateData } = body.data;
 
       try {
-        const current = await prisma.subTask.findUnique({
-          where: { id: request.params.subtaskId },
-          select: { version: true },
-        });
+        const current = await prisma.subTask.findUnique({ where: { id: request.params.subtaskId } });
         if (!current) {
           return reply.code(404).send({ error: { code: 'not_found', message: 'SubTask not found' } });
         }
-        const hadConflict = baseVersion !== undefined && current.version > baseVersion;
+        const hadConflict = detectConflict(current, base);
 
         const subtask = await prisma.subTask.update({
           where: { id: request.params.subtaskId },

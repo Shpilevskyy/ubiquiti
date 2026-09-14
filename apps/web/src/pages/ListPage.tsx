@@ -107,14 +107,14 @@ export function ListPage() {
 
         <TodoList
           todos={todos}
-          onToggleTodo={(todoId, done, baseVersion) => toggleTodo.mutate({ todoId, done, baseVersion })}
-          onUpdateTodoDescription={(todoId, descriptionMd, baseVersion) =>
-            updateTodoDescription.mutate({ todoId, descriptionMd, baseVersion })
+          onToggleTodo={(todoId, done) => toggleTodo.mutate({ todoId, done })}
+          onUpdateTodoDescription={(todoId, descriptionMd, baseDescriptionMd) =>
+            updateTodoDescription.mutate({ todoId, descriptionMd, baseDescriptionMd })
           }
           onDeleteTodo={(todoId) => deleteTodo.mutate(todoId)}
           onReorderTodo={(todoId, position) => reorderTodo.mutate({ todoId, position })}
-          onToggleSubTask={(todoId, subtaskId, done, baseVersion) =>
-            toggleSubTask.mutate({ todoId, subtaskId, done, baseVersion })
+          onToggleSubTask={(todoId, subtaskId, done) =>
+            toggleSubTask.mutate({ todoId, subtaskId, done })
           }
           onDeleteSubTask={(todoId, subtaskId) => deleteSubTask.mutate({ todoId, subtaskId })}
           onReorderSubTask={(todoId, subtaskId, position) =>

@@ -44,10 +44,13 @@ one boolean, and it scales with list size rather than with the size of the chang
    This makes reconciliation O(change) instead of O(list), and removes the race at its source
    rather than just papering it.
 
-3. Keep one `invalidate()` in `flushOutbox` after a batch of queued ops drains
-   ([:136](../apps/web/src/hooks/useList.ts), [:142](../apps/web/src/hooks/useList.ts)). After
-   replaying a backlog, a full resync is genuinely the right call — the optimistic state may be
-   many operations stale. Don't remove those.
+3. Keep the `invalidate()` calls in `flushOutbox`. After replaying a backlog a full resync is
+   genuinely the right call — the optimistic state may be many operations stale.
+
+   **Critical:** as of 2026-09-14 `flushOutbox` also takes a `reconcile` flag, passed on reconnect,
+   that forces the closing `invalidate()` even when the queue was empty. That is now the *only*
+   thing repairing broadcasts missed while the socket was down. Removing per-mutation invalidates
+   is fine; removing that one silently reintroduces permanent staleness after any network blip.
 
 ## Related, decide and record
 
@@ -67,8 +70,8 @@ write the decision into PROGRESS.md's Decisions section. Don't leave it implicit
   throttle to widen the window if needed.
 - Confirm the network tab shows **no** full list GET after a single toggle — only the PATCH.
 - Confirm `version` still advances correctly after a mutation (the reconciled row must come from
-  the response, not the optimistic guess) — otherwise the next `baseVersion` sent is stale and
-  produces false conflicts.
+  the response, not the optimistic guess) — the socket ordering guard in `useListSocket` compares
+  `version`, so a cache left holding a stale one will start dropping legitimate realtime updates.
 - Offline → queue several ops → reconnect: the post-flush `invalidate()` must still fire and the
   final state must match the server.
 

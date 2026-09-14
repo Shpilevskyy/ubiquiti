@@ -22,11 +22,26 @@ UI is built for this.
 
 ## Stale-write indicator (soft signal, non-blocking)
 
-The client includes the `version` it last saw when sending a PATCH. If the server's current
-version for that row is higher than the client's `baseVersion` (i.e. someone else changed it in
-the meantime), the server still applies the write, but the PATCH response includes
-`{ hadConflict: true }`. The client shows a brief, non-blocking toast ("This item was also
-edited elsewhere") — informational only, doesn't block or undo anything.
+The client includes a `base` object on a PATCH: the values it last saw for **the fields it is
+writing**. If any of them differs from the row's current value, the server still applies the write,
+but the PATCH response includes `{ hadConflict: true }`. The client shows a brief, non-blocking
+toast ("This item was also edited elsewhere") — informational only, doesn't block or undo anything.
+Omitting `base` skips the check; the write applies either way.
+
+**Revised 2026-09-14.** This was originally specced as a row-`version` comparison (client sends
+`baseVersion`; conflict if the row's `version` advanced). That was wrong for this API: a PATCH
+writes only the fields it names, so a row-level counter reported a conflict whenever *anything*
+on the row had changed — including a field the incoming write never touches. Two people editing
+different fields of the same todo both saw "also edited elsewhere" despite neither losing an edit.
+Comparing per-field values makes the signal mean what the toast claims: *the value you overwrote
+was not the value you last saw*.
+
+Note this also means the implementation is field-level LWW, not the whole-record LWW described
+above — writes to different fields of the same row both survive. That is strictly better than
+specced, and the `base` check now reports conflicts accordingly.
+
+`version` remains on the row, but its job is broadcast ordering — see
+[04-realtime-protocol.md](04-realtime-protocol.md#ordering-and-the-version-column).
 
 ## Deletes
 

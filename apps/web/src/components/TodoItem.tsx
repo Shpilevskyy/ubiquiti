@@ -20,7 +20,7 @@ interface TodoItemProps {
   onToggle: () => void;
   onDelete: () => void;
   onUpdateDescription: (descriptionMd: string) => void;
-  onToggleSubTask: (subtaskId: string, done: boolean, baseVersion: number) => void;
+  onToggleSubTask: (subtaskId: string, done: boolean) => void;
   onDeleteSubTask: (subtaskId: string) => void;
   onReorderSubTask: (subtaskId: string, position: number) => void;
   newSubTaskTitle: string;
@@ -99,7 +99,7 @@ export function TodoItem({
               <SubtaskItem
                 key={subtask.id}
                 subtask={subtask}
-                onToggle={() => onToggleSubTask(subtask.id, !subtask.done, subtask.version)}
+                onToggle={() => onToggleSubTask(subtask.id, !subtask.done)}
                 onDelete={() => onDeleteSubTask(subtask.id)}
               />
             ))}

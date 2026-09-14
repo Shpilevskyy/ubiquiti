@@ -1,8 +1,15 @@
 # Tasks
 
-Backlog distilled from a staff-level review of the full codebase on **2026-09-12**. Each file is
-self-contained: a fresh session should be able to open one, read it cold, and do the work without
-re-reviewing the whole repo.
+Backlog from two reviews: a full code review of all three workspaces on **2026-09-12** (tasks
+01–16) and an architecture review on **2026-09-14** (tasks 17–22). Each file is self-contained: a
+fresh session should be able to open one, read it cold, and do the work without re-reviewing the
+whole repo.
+
+**Already landed (2026-09-14), not in this backlog:** conflict detection rewritten from row-`version`
+to per-field `base` values, a `version`-based ordering guard on the realtime update handlers, and
+unconditional resync after a reconnect-triggered outbox flush. See PROGRESS.md. Tasks
+[04](04-route-scoping-and-conflict-check.md) and [05](05-cache-reconciliation.md) were revised to
+match — read their update notes before starting either.
 
 ## How to work these
 
@@ -71,6 +78,29 @@ Nothing here is broken; it's about the code staying readable as it grows.
 |---|------|------|
 | [14](14-server-hardening.md) | Graceful shutdown, rate limit, helmet, body cap, real healthz, pagination | M |
 | [15](15-db-indexes.md) | Composite indexes on `(listId, position)`; touch `List.updatedAt` | S |
+
+### P7 — Architecture (from the 2026-09-14 design review)
+
+Different in kind from the above: these are design decisions rather than defects. Two are
+ten-minute documentation tasks and two are deliberately parked with explicit trigger conditions —
+read the status line before planning work.
+
+| # | Task | Size |
+|---|------|------|
+| [17](17-record-reordering-decision.md) | Record the reordering decision (intent vs. value) | XS — docs |
+| [21](21-record-transport-decision.md) | Record the transport decision (Socket.IO vs. SSE) | XS — docs |
+| [18](18-fractional-string-indexing.md) | String fractional indexing instead of `position: Float` | M |
+| [19](19-transaction-boundaries.md) | Transaction boundaries; collapse redundant round trips | S–M |
+| [20](20-service-layer.md) | Service layer between routes and Prisma | L — **parked** |
+| [22](22-horizontal-scale-redis.md) | Redis adapter for multi-instance realtime | M — **parked** |
+
+**17 and 21 are worth doing before any interview.** Neither changes code — they record reasoning
+that currently exists nowhere, for two decisions (client-computed drag positions; Socket.IO over
+SSE) that a reviewer is likely to probe. Right now both read as defaults rather than choices.
+
+**20 and 22 are parked on purpose**, with the conditions that should un-park them written into each
+file. 22 has a cheap interim step worth taking now: document that single-instance deployment is a
+requirement, not an accident.
 
 ### Parked
 

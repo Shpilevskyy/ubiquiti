@@ -301,6 +301,49 @@ reproducing the exact failure mode before and after.
       discarded it (confirmed via no new PATCH network request and unchanged rendered content).
       Clean full build.
 
+- [x] Conflict detection rewritten from row-`version` to per-field values, plus two realtime
+      correctness fixes — all three from the architecture review on 2026-09-14, see
+      [tasks/README.md](tasks/README.md).
+      **Conflict signal**: `baseVersion` is gone from the wire; `UpdateTodoBodySchema`/
+      `UpdateSubTaskBodySchema` now carry an optional `base` object holding the values the client
+      last saw *for the fields it is writing* (schemas derived from a single `*MutableSchema` so
+      `base` can't drift from the writable field set). The server compares them in
+      `apps/server/src/conflict.ts#detectConflict`. Why: a PATCH only writes the fields it names,
+      so comparing a row-level counter reported `hadConflict: true` whenever *anything* on the row
+      had changed — two people editing different fields of the same todo both got "also edited
+      elsewhere" despite neither losing an edit. Client-side this also *removed* plumbing rather
+      than adding it: a toggle's previously-seen value is definitionally the negation of the new
+      one, so `toggleTodo`/`toggleSubTask` derive `base` themselves and the components stopped
+      threading `todo.version` through two component layers.
+      **`version` kept, repurposed**: the column stays because the broadcast-ordering fix below
+      needs a monotonic counter — `updatedAt` at Prisma's default millisecond precision would drop
+      legitimate updates that land in the same millisecond. So `version` stopped being a bad
+      conflict detector and became a good ordering guard. (The alternative considered and
+      rejected: drop the column entirely and use `updatedAt`, which the review had suggested
+      before the ordering fix made the precision requirement concrete.)
+      **Realtime ordering guard**: `useListSocket`'s `TODO_UPDATED`/`SUBTASK_UPDATED` handlers now
+      ignore any payload whose `version` isn't strictly greater than the cached row's. Broadcasts
+      are fire-and-forget from inside the REST handler with no ordering guarantee, so two updates
+      to one row could arrive reversed and leave the client latched on the older value — and
+      nothing would repair it, since `refetchOnReconnect`/`refetchOnWindowFocus` are deliberately
+      off. Deletes stay exempt (delete-wins) and creates keep their id check.
+      **Reconnect resync**: `flushOutbox` takes a `reconcile` flag, passed when `connectionStatus`
+      goes online, forcing the closing `invalidate()` even when the queue was empty. Previously
+      `if (sentAny)` meant a network blip with nothing queued resynced nothing at all — the client
+      silently missed every broadcast sent during the outage. The invalidate still runs only after
+      the queue drains, so it can't race a still-unsent optimistic change.
+      **Verified**: new `scripts/verify-conflict.py` (10 assertions incl. the exact false positive
+      that motivated this) passes against a live server; browser-verified realtime still applies
+      todo and subtask updates from a spoofed second client with no console errors; reproduced the
+      reconnect-staleness bug directly by stopping the server, editing the row in Postgres, and
+      restarting — tab picked up the change with an empty outbox, which is precisely what used to
+      fail; offline add → reconnect → flush re-verified unchanged. Clean full build.
+      Specs updated per specs/00's own rule: [specs/05](specs/05-sync-conflict-resolution.md)
+      (revised conflict rule + why), [specs/04](specs/04-realtime-protocol.md) (new ordering and
+      missed-broadcast sections), [specs/11](specs/11-testing-strategy.md), and
+      [specs/00](specs/00-overview.md) now states that specs are design intent while PROGRESS.md
+      is the as-built record, listing the standing divergences.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
@@ -328,6 +371,21 @@ of what it found:
   `TodoList` and 10 into `TodoItem`. `tasks/07`, `tasks/08`.
 - **No linter or formatter anywhere in the repo**, and no `typecheck` script. `tasks/12`.
 - Plus dead code, production hardening, indexes and accessibility — `tasks/09`–`tasks/16`.
+
+A second pass on 2026-09-14 reviewed the *architecture* rather than the code (`tasks/17`–`tasks/22`).
+Its conclusion was that the design is sound and worth keeping — single origin serving API + WS +
+static, `packages/shared` as the hand-written wire contract, REST for writes with WS for fanout,
+client-generated ids, server-authoritative outbox over a CRDT. Three findings were fixed immediately
+(see the top of Completed). The rest are recorded as tasks, of which two are documentation-only and
+two are deliberately parked with trigger conditions:
+- `tasks/17`, `tasks/21` — record the reasoning behind two decisions that currently read as
+  defaults: drag positions computed client-side (value) rather than server-side (intent), and
+  Socket.IO rather than SSE. Both ~10 minutes, no code.
+- `tasks/18` — string fractional indexing instead of `position: Float`, which removes the
+  float-precision collision specs/08 defers a fallback for rather than building that fallback.
+- `tasks/19` — transaction boundaries; also collapses the three-query create into one `upsert`.
+- `tasks/20` (service layer) and `tasks/22` (Redis adapter) — **parked**, not scheduled. Both are
+  correct-at-larger-scale and wrong-at-this-scale; each file lists what would un-park it.
 
 Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
 - [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)

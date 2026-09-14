@@ -15,9 +15,10 @@ app beats a partially-tested one if time runs short.
 2. **Idempotent create/update/delete** (integration, against a test Postgres) — POSTing the same
    client-generated id twice doesn't create a duplicate; PATCHing twice with the same body is a
    no-op; DELETEing twice doesn't error. See [03-api-rest.md](03-api-rest.md).
-3. **Version/conflict signaling** (integration) — a PATCH with a stale `baseVersion` still
-   succeeds and returns `hadConflict: true`; a PATCH with a current `baseVersion` doesn't. See
-   [05-sync-conflict-resolution.md](05-sync-conflict-resolution.md).
+3. **Conflict signaling** (integration) — a PATCH whose `base` disagrees with the row's current
+   value still succeeds and returns `hadConflict: true`; one whose `base` matches doesn't; and a
+   concurrent edit to a *different* field does not report a conflict (the regression this check
+   was rewritten to fix). See [05-sync-conflict-resolution.md](05-sync-conflict-resolution.md).
 4. **Realtime broadcast** (integration, using `socket.io-client`) — a REST mutation from one
    connected client results in the expected event on another client's socket in the same room,
    and is *not* delivered back to the originating client.

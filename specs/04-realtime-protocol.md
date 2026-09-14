@@ -46,6 +46,31 @@ A `useListSocket(listId)` hook (see [07-frontend-architecture.md](07-frontend-ar
 subscribes to these events and applies them to the TanStack Query cache for `['list', listId]`
 via targeted `setQueryData` updates (not a full refetch, to keep collaboration feeling instant).
 
+## Ordering, and the `version` column
+
+Broadcasts are emitted from inside the REST handler after the write commits, and Socket.IO gives
+no ordering guarantee between two independently-emitted events. Two updates to the same row can
+therefore arrive at a client in the opposite order to which they were committed.
+
+Every Todo/SubTask row carries a monotonically incrementing `version`. The client's `todo:updated`
+and `subtask:updated` handlers **ignore any payload whose `version` is not strictly greater than
+the version already in cache**, so an out-of-order delivery can't make a client latch onto the
+older of two values. Nothing else would repair that: the list query deliberately has
+`refetchOnReconnect`/`refetchOnWindowFocus` disabled (see
+[06-offline-sync.md](06-offline-sync.md)), so a client could hold the stale value until it
+remounted.
+
+Deletes are exempt — delete always wins over a concurrent update, per
+[05-sync-conflict-resolution.md](05-sync-conflict-resolution.md#deletes) — and creates are guarded
+by an id check instead, since a create has no prior version to compare against.
+
+## Missed broadcasts
+
+A client that is disconnected when a broadcast fires never receives it, and broadcasts are
+fire-and-forget (no server-side outbox). On reconnect the client therefore flushes its offline
+outbox and then **invalidates the list query unconditionally**, even when the queue was empty —
+that refetch is the only thing that repairs state missed during the outage.
+
 ## Connecting the mutation's REST id to the socket
 
 Associating a REST call with "which socket made it" is done by having the client send its

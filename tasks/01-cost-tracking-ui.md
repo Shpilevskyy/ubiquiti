@@ -34,7 +34,7 @@ This is the single most visible gap for a reviewer, and the cheapest to close.
 
 1. Add `updateTodoCost` and `updateSubTaskCost` mutations to
    [../apps/web/src/hooks/useList.ts](../apps/web/src/hooks/useList.ts). Mirror
-   `updateTodoDescription` exactly — same `mutateWithOutbox` call, same `baseVersion` plumbing,
+   `updateTodoDescription` exactly — same `mutateWithOutbox` call, same `base`/conflict plumbing,
    same conflict toast via `noteConflict`. The only difference is the field. This keeps cost
    edits offline-safe and realtime-broadcast like every other field, for free.
 

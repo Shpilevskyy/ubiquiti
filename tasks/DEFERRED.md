@@ -25,8 +25,9 @@ easy to get wrong, in rough order:
    continues, network error stops and retries. This is where the defects in
    [03](03-outbox-reliability.md) live, so tests here are what keep them fixed. `fake-indexeddb`
    for the queue.
-3. **Version/conflict signaling** (integration) — stale `baseVersion` returns `hadConflict: true`
-   and still applies the write; current `baseVersion` doesn't. Guards the LWW contract in
+3. **Conflict signaling** (integration) — a `base` that disagrees with the row returns
+   `hadConflict: true` and still applies the write; a matching one doesn't; and an edit to a
+   different field reports no conflict. Guards the LWW contract in
    [../specs/05-sync-conflict-resolution.md](../specs/05-sync-conflict-resolution.md) and the
    atomicity fix in [04](04-route-scoping-and-conflict-check.md).
 

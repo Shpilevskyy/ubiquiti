@@ -44,46 +44,36 @@ Also check `count` before broadcasting on DELETE, the way
 [../apps/server/src/routes/lists.ts:89](../apps/server/src/routes/lists.ts) already does — right
 now a delete of a nonexistent todo still broadcasts `todo:deleted`.
 
-## Bug 2 — conflict detection is TOCTOU
+## Bug 2 — the conflict check is still TOCTOU
 
-[../apps/server/src/routes/todos.ts:65-78](../apps/server/src/routes/todos.ts),
-[../apps/server/src/routes/subtasks.ts:66-78](../apps/server/src/routes/subtasks.ts)
+> **Updated 2026-09-14.** The *semantics* of this check were rewritten (it now compares the
+> per-field `base` values the client last saw, not the row's `version` — see
+> [../specs/05-sync-conflict-resolution.md](../specs/05-sync-conflict-resolution.md)). That fixed
+> a false-positive problem, **not** the race described here, which is still open.
 
-The version check is a `findUnique({ select: { version: true } })` followed by a separate
-`update`, with no transaction between them:
+[../apps/server/src/routes/todos.ts:65-72](../apps/server/src/routes/todos.ts),
+[../apps/server/src/routes/subtasks.ts:66-73](../apps/server/src/routes/subtasks.ts)
+
+The check is a `findUnique` followed by a separate `update`, with no transaction between them:
 
 ```ts
-const current = await prisma.todo.findUnique({ where: { id }, select: { version: true } });
-const hadConflict = baseVersion !== undefined && current.version > baseVersion;
+const current = await prisma.todo.findUnique({ where: { id: request.params.todoId } });
+if (!current) return 404;
+const hadConflict = detectConflict(current, base);
+
 const todo = await prisma.todo.update({ ... version: { increment: 1 } });
 ```
 
-Two concurrent PATCHes both read version 3, both compute `hadConflict: false`, and both report no
-conflict — even though the second one demonstrably clobbered the first. The *write* is still
-LWW-correct per
-[../specs/05-sync-conflict-resolution.md](../specs/05-sync-conflict-resolution.md); only the signal
-lies, which is worse than not having it, because the user is told nothing happened.
+Another write landing between the read and the write is compared against values that are already
+stale, so `hadConflict` can come back `false` for a write that demonstrably clobbered something.
+The write itself is still LWW-correct; only the signal is unreliable.
 
-**Fix:** make the check and the write one atomic statement.
+**Fix:** wrap the read and the write in `prisma.$transaction` so the comparison and the write see
+the same snapshot. (The earlier suggestion here — collapsing into a single `updateMany` with
+`version` in the `where` — no longer applies now that the check compares field values rather than a
+row counter. A transaction is both simpler and what the value comparison actually needs.)
 
-```ts
-// Try the conditional write first: if it matches, there was no conflict.
-const { count } = await prisma.todo.updateMany({
-  where: { id: todoId, listId, ...(baseVersion !== undefined ? { version: baseVersion } : {}) },
-  data: { ...updateData, version: { increment: 1 } },
-});
-```
-
-`count === 1` means no conflict. `count === 0` means either the row is gone (→ 404) or the version
-moved (→ conflict). Distinguish by re-reading the row; if it exists, apply the write
-unconditionally (LWW still wins, per spec) and return `hadConflict: true`.
-
-Note this also folds Bug 1's scoping in for free, since `updateMany` accepts the compound `where`.
-
-`updateMany` doesn't support `include`, so the response still needs a follow-up read to return the
-todo with its `subtasks` (`orderBy: { position: 'asc' }` — don't drop that, it was added
-deliberately). Wrap the whole thing in `prisma.$transaction` if you want the read to be consistent
-with the write.
+Fold Bug 1's parent scoping into the same `where` clauses while you're in there.
 
 ## Verification
 
@@ -95,13 +85,15 @@ Bug 1:
 - Confirm the correct-parent path still works unchanged.
 
 Bug 2:
-- Fresh `baseVersion` → `hadConflict: false`, write applies.
-- Stale `baseVersion` → `hadConflict: true`, write **still applies** (LWW — do not regress this).
-- Omitted `baseVersion` → no conflict check, write applies.
+- Matching `base` → `hadConflict: false`, write applies.
+- Disagreeing `base` → `hadConflict: true`, write **still applies** (LWW — do not regress this).
+- Omitted `base` → no conflict check, write applies.
+- A concurrent edit to a *different* field → `hadConflict: false` (the false positive fixed on
+  2026-09-14 — this is the one most likely to regress).
 - PATCH after DELETE → 404.
 
-All four of those cases were verified once before (see PROGRESS.md's sync/conflict entry) — re-run
-them, they're the regression suite for this change.
+All of these have a runnable regression script; see PROGRESS.md's conflict-detection entry for the
+seven cases it covers. Re-run it after this change.
 
 ## Done when
 

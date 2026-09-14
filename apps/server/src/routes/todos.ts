@@ -8,6 +8,7 @@ import {
   type TodoDeletedPayload,
 } from '@ubiquiti-todo/shared';
 import { prisma } from '../prisma.js';
+import { detectConflict } from '../conflict.js';
 import { serializeTodo } from '../serializers.js';
 
 export async function todosRoutes(app: FastifyInstance) {
@@ -59,17 +60,14 @@ export async function todosRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: { code: 'invalid_body', message: body.error.message } });
       }
 
-      const { baseVersion, ...updateData } = body.data;
+      const { base, ...updateData } = body.data;
 
       try {
-        const current = await prisma.todo.findUnique({
-          where: { id: request.params.todoId },
-          select: { version: true },
-        });
+        const current = await prisma.todo.findUnique({ where: { id: request.params.todoId } });
         if (!current) {
           return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
         }
-        const hadConflict = baseVersion !== undefined && current.version > baseVersion;
+        const hadConflict = detectConflict(current, base);
 
         const todo = await prisma.todo.update({
           where: { id: request.params.todoId },

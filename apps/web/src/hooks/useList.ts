@@ -106,7 +106,12 @@ export function useList(listId: string | undefined) {
   const flushRetryDelayRef = useRef(FLUSH_RETRY_BASE_MS);
   const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  async function flushOutbox() {
+  // `reconcile` forces the closing invalidate() even when the queue was empty. Needed on
+  // reconnect: while the socket was down this client missed every broadcast for the list, and
+  // disabling refetchOnReconnect/refetchOnWindowFocus above (correctly, to stop them racing this
+  // flush) removed the refetch that used to repair that. Without this, a network blip with
+  // nothing queued leaves the client silently stale until it remounts.
+  async function flushOutbox({ reconcile = false }: { reconcile?: boolean } = {}) {
     if (!listId) return;
 
     let sentAny = false;
@@ -131,7 +136,7 @@ export function useList(listId: string | undefined) {
         }
         // Network error / 5xx: stop here, leave the rest queued, retry the whole flush later
         // with backoff rather than looping tightly against a server/connection that's down.
-        flushTimeoutRef.current = setTimeout(flushOutbox, flushRetryDelayRef.current);
+        flushTimeoutRef.current = setTimeout(() => flushOutbox({ reconcile }), flushRetryDelayRef.current);
         flushRetryDelayRef.current = Math.min(flushRetryDelayRef.current * 2, FLUSH_RETRY_MAX_MS);
         if (sentAny) invalidate();
         return;
@@ -139,16 +144,20 @@ export function useList(listId: string | undefined) {
     }
 
     flushRetryDelayRef.current = FLUSH_RETRY_BASE_MS;
-    if (sentAny) invalidate();
+    // Ordering matters: the invalidate only runs once the queue has drained, so a refetch can
+    // never overwrite a still-unsent optimistic change.
+    if (sentAny || reconcile) invalidate();
   }
 
   useEffect(() => {
     if (!listId) return;
     flushOutbox();
     const unsubscribe = connectionStatus.subscribe(() => {
-      if (connectionStatus.getStatus() === 'online') flushOutbox();
+      // Coming back online: flush anything queued, then resync regardless, since broadcasts sent
+      // while we were disconnected are gone for good.
+      if (connectionStatus.getStatus() === 'online') flushOutbox({ reconcile: true });
     });
-    const pollId = setInterval(flushOutbox, FLUSH_POLL_MS);
+    const pollId = setInterval(() => flushOutbox(), FLUSH_POLL_MS);
     return () => {
       unsubscribe();
       clearInterval(pollId);
@@ -200,9 +209,11 @@ export function useList(listId: string | undefined) {
 
   const toggleTodo = useMutation({
     ...OFFLINE_AWARE,
-    mutationFn: ({ todoId, done, baseVersion }: { todoId: string; done: boolean; baseVersion: number }) =>
+    // `base` is what this client last saw for the field it's writing — for a toggle that's
+    // definitionally the negation of the new value, so callers don't have to pass it.
+    mutationFn: ({ todoId, done }: { todoId: string; done: boolean }) =>
       mutateWithOutbox<{ hadConflict: boolean }>(
-        { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { done, baseVersion } },
+        { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { done, base: { done: !done } } },
         (old) =>
           old &&
           produce(old, (draft) => {
@@ -228,14 +239,18 @@ export function useList(listId: string | undefined) {
     mutationFn: ({
       todoId,
       descriptionMd,
-      baseVersion,
+      baseDescriptionMd,
     }: {
       todoId: string;
       descriptionMd: string;
-      baseVersion: number;
+      baseDescriptionMd: string | null;
     }) =>
       mutateWithOutbox<{ hadConflict: boolean }>(
-        { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { descriptionMd, baseVersion } },
+        {
+          method: 'PATCH',
+          path: `/lists/${listId}/todos/${todoId}`,
+          body: { descriptionMd, base: { descriptionMd: baseDescriptionMd } },
+        },
         (old) =>
           old &&
           produce(old, (draft) => {
@@ -314,22 +329,13 @@ export function useList(listId: string | undefined) {
 
   const toggleSubTask = useMutation({
     ...OFFLINE_AWARE,
-    mutationFn: ({
-      todoId,
-      subtaskId,
-      done,
-      baseVersion,
-    }: {
-      todoId: string;
-      subtaskId: string;
-      done: boolean;
-      baseVersion: number;
-    }) =>
+    // See toggleTodo on why `base` is derived rather than passed.
+    mutationFn: ({ todoId, subtaskId, done }: { todoId: string; subtaskId: string; done: boolean }) =>
       mutateWithOutbox<{ hadConflict: boolean }>(
         {
           method: 'PATCH',
           path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`,
-          body: { done, baseVersion },
+          body: { done, base: { done: !done } },
         },
         (old) =>
           old &&
