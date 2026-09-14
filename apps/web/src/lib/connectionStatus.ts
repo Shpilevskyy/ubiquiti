@@ -12,7 +12,9 @@ const listeners = new Set<Listener>();
 function setStatus(next: Status) {
   if (next === status) return;
   status = next;
-  listeners.forEach((listener) => listener());
+  listeners.forEach((listener) => {
+    listener();
+  });
 }
 
 export const connectionStatus = {

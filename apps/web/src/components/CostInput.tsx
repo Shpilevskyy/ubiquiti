@@ -64,6 +64,9 @@ export function CostInput({ costCents, onSave }: CostInputProps) {
   }
 
   return (
+    // Keyboard reachability for this click-to-edit trigger is tasks/16-accessibility.md's scope.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: tracked in tasks/16-accessibility.md
+    // biome-ignore lint/a11y/noStaticElementInteractions: tracked in tasks/16-accessibility.md
     <span
       onClick={startEditing}
       className="cursor-text rounded-md px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50"

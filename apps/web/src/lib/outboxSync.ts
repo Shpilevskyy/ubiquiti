@@ -47,11 +47,15 @@ interface SyncState {
 const states = new Map<string, SyncState>();
 
 function notifyNotice(state: SyncState, message: string) {
-  state.callbacks.forEach((cb) => cb.onNotice(message));
+  state.callbacks.forEach((cb) => {
+    cb.onNotice(message);
+  });
 }
 
 function notifyInvalidate(state: SyncState) {
-  state.callbacks.forEach((cb) => cb.onInvalidate());
+  state.callbacks.forEach((cb) => {
+    cb.onInvalidate();
+  });
 }
 
 // Flushing the outbox (specs/06-offline-sync.md): replay queued ops for this list in FIFO order,

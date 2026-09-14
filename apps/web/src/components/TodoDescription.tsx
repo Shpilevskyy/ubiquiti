@@ -7,6 +7,11 @@ interface TodoDescriptionProps {
   onSave: (descriptionMd: string) => void;
 }
 
+function autoGrow(el: HTMLTextAreaElement) {
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
+
 // specs/09-markdown-descriptions.md's edit/view toggle. Deliberately doesn't sync `draft` from
 // `descriptionMd` while editing — only when entering edit mode — so a realtime update landing
 // mid-edit doesn't overwrite what the user is typing; view mode always reads `descriptionMd`
@@ -33,11 +38,6 @@ export function TodoDescription({ descriptionMd, onSave }: TodoDescriptionProps)
   function discard() {
     committedRef.current = true;
     setIsEditing(false);
-  }
-
-  function autoGrow(el: HTMLTextAreaElement) {
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
   }
 
   useEffect(() => {
@@ -73,6 +73,10 @@ export function TodoDescription({ descriptionMd, onSave }: TodoDescriptionProps)
   }
 
   return (
+    // Keyboard reachability for this click-to-edit trigger is tasks/16-accessibility.md's scope
+    // (item 3: "The description editor is unreachable by keyboard").
+    // biome-ignore lint/a11y/useKeyWithClickEvents: tracked in tasks/16-accessibility.md
+    // biome-ignore lint/a11y/noStaticElementInteractions: tracked in tasks/16-accessibility.md
     <div
       onClick={startEditing}
       className="prose prose-sm prose-slate mt-1 max-w-none cursor-text rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold prose-h1:text-sm prose-h2:text-sm prose-p:my-1 prose-blockquote:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-1 prose-hr:my-2"

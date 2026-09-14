@@ -97,6 +97,7 @@ function ListPageContent({ listId }: { listId: string }) {
               </div>
             )}
             <button
+              type="button"
               onClick={handleDeleteList}
               disabled={deleteList.isPending}
               className="text-xs text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -126,6 +127,8 @@ function ListPageContent({ listId }: { listId: string }) {
       </div>
 
       {conflictNotice && (
+        // Keyboard-dismissibility for this toast is tasks/16-accessibility.md's scope.
+        // biome-ignore lint/a11y/useKeyWithClickEvents: tracked in tasks/16-accessibility.md
         <div
           role="status"
           onClick={dismissConflictNotice}

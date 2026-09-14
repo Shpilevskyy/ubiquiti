@@ -1,6 +1,6 @@
 # 12 — Linter/formatter, `typecheck` script, CI workflow
 
-**Status:** not started
+**Status:** done (repo-wide formatting pass not applied — see PROGRESS.md)
 **Size:** S
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -61,7 +61,7 @@ instead and skip this.
 
 ## Done when
 
-- [ ] Linter + formatter configured across all workspaces
-- [ ] `typecheck` / `lint` / `format` scripts at the root
-- [ ] CI runs build + typecheck + lint on push and PR
-- [ ] Lint findings fixed in a separate commit from the config
+- [x] Linter + formatter configured across all workspaces
+- [x] `typecheck` / `lint` / `format` scripts at the root
+- [x] CI runs build + typecheck + lint on push and PR
+- [x] Lint findings fixed in a separate commit from the config

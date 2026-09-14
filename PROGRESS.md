@@ -683,6 +683,67 @@ reproducing the exact failure mode before and after.
       render correctly, previously unstyled). Clean full build (`tsc` + `vite build`), no console
       errors.
 
+- [x] Linter/formatter, `typecheck` script, CI workflow —
+      [tasks/12-tooling-lint-ci.md](tasks/12-tooling-lint-ci.md). Repo had no linter, no formatter,
+      and no dedicated typecheck script anywhere.
+      **Biome** chosen over ESLint+Prettier (one dependency, one config, covers lint+format+import
+      sorting), configured via `biome.jsonc` at the repo root, scoped to `apps/**`/`packages/**`.
+      Formatter settings (2-space indent, single quotes for JS, 100-col width) matched to the
+      codebase's existing hand-written style rather than Biome's defaults, so `npm run lint` doesn't
+      fight established conventions. The React Hooks domain (`linter.domains.react`) is on, which
+      includes `useExhaustiveDependencies`.
+      **Root scripts**: `typecheck` (builds `shared` for real — other workspaces resolve its
+      generated `dist`/types via the workspace symlink — then `tsc --noEmit` for `server` and `web`,
+      since `web` already sets `noEmit: true` but `server`/`shared` emit by default), `lint`
+      (`biome lint .`), `format` (`biome format --write .`).
+      **CI**: new [.github/workflows/ci.yml](.github/workflows/ci.yml), on push to `main` and on
+      every PR — install, build `shared`, typecheck, lint. Test step intentionally not added yet,
+      per [tasks/DEFERRED.md](tasks/DEFERRED.md); wire it into this same workflow whenever testing
+      is picked up.
+      **Real findings fixed** (separate commit from the config, per the task's own instruction —
+      "a config diff mixed with a hundred auto-formatted files is unreviewable"):
+      - The exhaustive-deps case the task called out by name
+        ([useList.ts](apps/web/src/hooks/useList.ts), the outbox-sync mount effect deliberately
+        keyed on `listId` alone) now carries an explicit `biome-ignore` next to its existing prose
+        justification, instead of being invisible to the linter.
+      - `TodoDescription.tsx`'s `autoGrow` helper closed over nothing from the component and was
+        flagged as a missing effect dependency; moved it to module scope (a pure function of its
+        `el` argument) — the correct fix, not a suppression, and one fewer function recreated every
+        render.
+      - Three `Array.forEach(cb => cb())`-shaped callbacks
+        ([connectionStatus.ts](apps/web/src/lib/connectionStatus.ts),
+        [outboxSync.ts](apps/web/src/lib/outboxSync.ts) x2) wrapped in braces so the arrow doesn't
+        implicitly return a value `forEach` ignores.
+      - Four Delete/drag-handle `<button>`s missing an explicit `type="button"`
+        ([SubtaskItem.tsx](apps/web/src/components/SubtaskItem.tsx),
+        [TodoItem.tsx](apps/web/src/components/TodoItem.tsx),
+        [LandingPage.tsx](apps/web/src/pages/LandingPage.tsx),
+        [ListPage.tsx](apps/web/src/pages/ListPage.tsx)) — harmless today (none sit inside a
+        `<form>`) but a real latent bug the a11y rule caught for free.
+      - `noNonNullAssertion` turned off repo-wide (config change, not a per-site fix): this codebase
+        uses `!` deliberately wherever a value's non-nullness is already guaranteed by an adjacent
+        runtime check (e.g. `listId!` inside a query gated on `enabled: Boolean(listId)`) — over a
+        dozen call sites, all following the same established, locally-justified pattern. Rewriting
+        all of them to fight the rule seemed worse than documenting the convention and moving on.
+      **Three click-to-edit a11y findings deliberately left as tracked `biome-ignore`s, not
+      fixed here**: `CostInput.tsx`, `TodoDescription.tsx`, and the conflict-notice toast in
+      `ListPage.tsx` all have an `onClick` on a non-interactive element with no keyboard
+      equivalent — exactly [tasks/16-accessibility.md](tasks/16-accessibility.md)'s scope (its
+      item 3 names `TodoDescription.tsx` specifically). Fixing them here would've meant doing
+      task 16's work inside task 12's diff; each site instead got an inline `biome-ignore` with a
+      comment pointing at that task, so CI stays green without silently dropping the signal —
+      removing the ignore comments is task 16's own verification step.
+      **Full repo-wide formatting pass deliberately not run**: `format` exists as a script and
+      works, but running it now would touch on the order of dozens of files with zero behavioral
+      change — exactly the "config diff mixed with a hundred auto-formatted files" the task warns
+      against, and orthogonal to what CI actually enforces (CI runs `lint`, not `format --check`).
+      Left for whoever wants that diff on its own.
+      **Verified**: `npm run typecheck`/`lint`/`build` all pass from a simulated clean state
+      (deleted `packages/shared/dist` and `apps/server/dist` first, confirming `typecheck` rebuilds
+      what it needs rather than relying on stale output); browser-smoke-tested the description
+      click-to-edit/autoGrow/Escape-discard path (touched by the `autoGrow` move) against a live
+      dev server with no console errors.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

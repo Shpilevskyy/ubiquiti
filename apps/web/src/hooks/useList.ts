@@ -137,11 +137,12 @@ export function useList(listId: string | undefined) {
   // the same list share exactly one loop rather than each starting its own poller/subscription
   // racing over the same IndexedDB queue (tasks/07). This effect just registers for the two things
   // the loop can't do itself: showing a notice, and resyncing the cache once a batch drains.
+  // Deliberately keyed on listId alone: onNotice/onInvalidate close over stable dependencies
+  // (queryClient, the notice hook's stable setter) that don't need their own re-subscription.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above.
   useEffect(() => {
     if (!listId) return;
     return startOutboxSync(listId, { onNotice: showNotice, onInvalidate: invalidate });
-    // Deliberately keyed on listId alone: onNotice/onInvalidate close over stable dependencies
-    // (queryClient, the notice hook's stable setter) that don't need their own re-subscription.
   }, [listId]);
 
   // TanStack Query has its own network-awareness — by default (networkMode: 'online') it pauses

@@ -73,6 +73,7 @@ export function TodoItem({ todo }: TodoItemProps) {
           }
         />
         <button
+          type="button"
           onClick={() => deleteTodo.mutate(todo.id)}
           className="text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
         >
