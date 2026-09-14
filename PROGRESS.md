@@ -848,7 +848,9 @@ reproducing the exact failure mode before and after.
       own `defaultShouldDehydrateQuery`, so a query that's currently loading/erroring isn't
       persisted with no usable data) — nothing else in this app needs to survive a reload.
       **Storage choice: `localStorage`**, not IndexedDB (the task asked this be decided and
-      recorded, see Decisions below).
+      recorded, see Decisions below). Uses `createAsyncStoragePersister` (not the sync-specific
+      variant, which is deprecated upstream in favor of this one) — same `localStorage` underneath,
+      caught and fixed in review before this landed.
       **A real bug found and fixed while verifying this**: [ListPage.tsx](apps/web/src/pages/ListPage.tsx)
       checked `listQuery.isError` before checking whether `listQuery.data` was present. That was
       fine when it was written (tasks/06, defending against a *different* paused-query state) but
@@ -980,12 +982,14 @@ Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
   cost next to a silently lost edit.
 
 - Query persistence storage ([tasks/13-offline-app-shell.md](tasks/13-offline-app-shell.md)):
-  `localStorage` over IndexedDB for the persisted TanStack Query cache. It's synchronous, so the
-  cache is available on the very first render with no async hydration flicker, and list/todo JSON
-  is well within its ~5MB limit for a demo app. IndexedDB (already used for the outbox queue) would
-  only earn its async complexity — and `@tanstack/query-async-storage-persister`'s extra moving
-  parts — at a data size this app doesn't reach. Either was defensible per the task's own framing;
-  this is the one with less code for the win it needed to deliver.
+  `localStorage` over IndexedDB for the persisted TanStack Query cache — list/todo JSON is well
+  within its ~5MB limit for a demo app, and it needs no extra glue code. IndexedDB (already used
+  for the outbox queue) would only earn its added complexity at a data size this app doesn't reach.
+  Either was defensible per the task's own framing; this is the one with less code for the win it
+  needed to deliver. Wired via `createAsyncStoragePersister` (`@tanstack/query-async-storage-
+  persister`) rather than the sync-specific package/function, which is deprecated upstream in
+  favor of this one — same `localStorage` underneath either way, since the "async" in the name
+  describes the persister's uniform interface, not a requirement on the storage it wraps.
 
 ## Open questions
 
