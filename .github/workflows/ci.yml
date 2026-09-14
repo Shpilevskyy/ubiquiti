@@ -27,3 +27,8 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # Checks formatting without writing, so drift fails CI instead of surfacing as a surprise
+      # diff the next time someone runs `npm run format`.
+      - name: Format check
+        run: npm run format:check

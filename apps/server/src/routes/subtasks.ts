@@ -64,12 +64,22 @@ export async function subtasksRoutes(app: FastifyInstance) {
       const { base, ...updateData } = request.body;
 
       // See the identical comment in todos.ts's PATCH handler: one transaction scoped to the
-      // parent todoId fixes both the wrong-room broadcast (tasks/04 bug 1) and the TOCTOU conflict
+      // parent fixes both the wrong-room broadcast (tasks/04 bug 1) and the TOCTOU conflict
       // check (tasks/04 bug 2); a concurrent delete landing inside the transaction throws P2025,
       // mapped to 404 centrally in errorHandler.ts (tasks/09) rather than a try/catch here.
+      //
+      // Scoped to *both* ancestors, not just the immediate todoId. listId is two levels up but
+      // it's still an unvalidated path segment, and it's the one this handler broadcasts to —
+      // so without `todo: { listId }` a request naming the right subtask under the wrong list
+      // wrote the row and then announced it to a room nobody is in, leaving the list's actual
+      // viewers silently stale. That's tasks/04 bug 1 one level deeper than it was fixed.
       const result = await prisma.$transaction(async (tx) => {
         const current = await tx.subTask.findFirst({
-          where: { id: request.params.subtaskId, todoId: request.params.todoId },
+          where: {
+            id: request.params.subtaskId,
+            todoId: request.params.todoId,
+            todo: { listId: request.params.listId },
+          },
         });
         if (!current) return null;
 
@@ -87,7 +97,12 @@ export async function subtasksRoutes(app: FastifyInstance) {
 
       const serialized = serializeSubTask(result.subtask);
       const payload: SubTaskUpdatedPayload = { todoId: request.params.todoId, subtask: serialized };
-      app.broadcaster.broadcastToList(request.params.listId, request.clientId, SOCKET_EVENTS.SUBTASK_UPDATED, payload);
+      app.broadcaster.broadcastToList(
+        request.params.listId,
+        request.clientId,
+        SOCKET_EVENTS.SUBTASK_UPDATED,
+        payload,
+      );
       return { subtask: serialized, hadConflict: result.hadConflict };
     },
   );
@@ -97,14 +112,27 @@ export async function subtasksRoutes(app: FastifyInstance) {
     { schema: { params: SubTaskParamsSchema } },
     async (request, reply) => {
       // See the identical comment in todos.ts's DELETE handler: a subtask under a *different*
-      // todo 404s (tasks/04 bug 1); one that doesn't exist at all stays a 204 idempotent retry.
-      const existing = await prisma.subTask.findUnique({ where: { id: request.params.subtaskId } });
-      if (existing && existing.todoId !== request.params.todoId) {
+      // parent 404s (tasks/04 bug 1); one that doesn't exist at all stays a 204 idempotent retry.
+      // Both ancestors are checked, for the same reason as the PATCH above — a mismatched listId
+      // must not delete the row and then broadcast the deletion to the wrong room.
+      const existing = await prisma.subTask.findUnique({
+        where: { id: request.params.subtaskId },
+        include: { todo: { select: { listId: true } } },
+      });
+      if (
+        existing &&
+        (existing.todoId !== request.params.todoId ||
+          existing.todo.listId !== request.params.listId)
+      ) {
         return reply.code(404).send({ error: { code: 'not_found', message: 'SubTask not found' } });
       }
 
       const { count } = await prisma.subTask.deleteMany({
-        where: { id: request.params.subtaskId, todoId: request.params.todoId },
+        where: {
+          id: request.params.subtaskId,
+          todoId: request.params.todoId,
+          todo: { listId: request.params.listId },
+        },
       });
       if (count > 0) {
         const payload: SubTaskDeletedPayload = {

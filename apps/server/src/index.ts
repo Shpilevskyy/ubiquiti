@@ -45,7 +45,13 @@ await app.register(fastifyHelmet);
 // set to 429, which flows through the same generic error handler as everything else
 // (errorHandler.ts's STATUS_TO_CODE already maps 429), so no custom errorResponseBuilder is
 // needed to keep the unified `{ error: { code, message } }` shape.
-await app.register(fastifyRateLimit, { max: 100, timeWindow: '1 minute' });
+//
+// The limit is per-IP and, being global, also covers the static assets served below — so the
+// original 100/min was measuring the wrong thing: two browser tabs of one collaborating pair
+// share an IP, every mutation is a request, and each cold page load spends several more on
+// assets. That put a normal two-person demo within reach of a 429, which is a far worse failure
+// than the abuse it was guarding against. 600/min still bounds a scripted caller to 10 req/s.
+await app.register(fastifyRateLimit, { max: 600, timeWindow: '1 minute' });
 
 // Lets routes declare `schema: { body, params }` using the zod schemas from packages/shared
 // directly instead of a hand-rolled `Schema.safeParse` + manual 400 in every handler (tasks/09).
@@ -79,7 +85,9 @@ app.get('/healthz', async (_request, reply) => {
     return 'ok';
   } catch (error) {
     app.log.error(error, 'healthz: database unreachable');
-    return reply.code(503).send({ error: { code: 'service_unavailable', message: 'Database unreachable' } });
+    return reply
+      .code(503)
+      .send({ error: { code: 'service_unavailable', message: 'Database unreachable' } });
   }
 });
 

@@ -67,7 +67,12 @@ export function registerSocketHandlers(io: SocketIOServer, log: FastifyBaseLogge
     // Broadcasts a change event to everyone viewing the list, excluding the sockets of the
     // member whose REST call caused it (if known) — see
     // specs/04-realtime-protocol.md#connecting-the-mutations-rest-id-to-the-socket.
-    broadcastToList(listId: string, excludeMemberId: string | undefined, event: string, payload: unknown) {
+    broadcastToList(
+      listId: string,
+      excludeMemberId: string | undefined,
+      event: string,
+      payload: unknown,
+    ) {
       const excludeSocketIds = excludeMemberId ? presence.getSocketIds(excludeMemberId) : [];
       io.to(listRoom(listId)).except(excludeSocketIds).emit(event, payload);
     },

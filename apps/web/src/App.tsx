@@ -1,5 +1,10 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { QueryClient, QueryClientProvider, defaultShouldDehydrateQuery, type Query } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  defaultShouldDehydrateQuery,
+  type Query,
+} from '@tanstack/react-query';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { LandingPage } from './pages/LandingPage';
@@ -23,7 +28,10 @@ const persister = createAsyncStoragePersister({ storage: window.localStorage });
 // (query succeeded, or is pending with a promise) on top of the key filter, so a query that's
 // currently loading or errored doesn't get persisted with no usable data.
 function shouldPersist(query: Query) {
-  return (query.queryKey[0] === 'list' || query.queryKey[0] === 'lists') && defaultShouldDehydrateQuery(query);
+  return (
+    (query.queryKey[0] === 'list' || query.queryKey[0] === 'lists') &&
+    defaultShouldDehydrateQuery(query)
+  );
 }
 
 persistQueryClient({

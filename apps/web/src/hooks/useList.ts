@@ -30,7 +30,10 @@ function replaceTodo(old: GetListResponse | undefined, todo: Todo): GetListRespo
   );
 }
 
-function replaceSubTask(old: GetListResponse | undefined, subtask: SubTask): GetListResponse | undefined {
+function replaceSubTask(
+  old: GetListResponse | undefined,
+  subtask: SubTask,
+): GetListResponse | undefined {
   return (
     old &&
     produce(old, (draft) => {
@@ -194,7 +197,11 @@ export function useList(listId: string | undefined) {
     // definitionally the negation of the new value, so callers don't have to pass it.
     mutationFn: ({ todoId, done }: { todoId: string; done: boolean }) =>
       mutateWithOutbox<{ todo: Todo; hadConflict: boolean }>(
-        { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { done, base: { done: !done } } },
+        {
+          method: 'PATCH',
+          path: `/lists/${listId}/todos/${todoId}`,
+          body: { done, base: { done: !done } },
+        },
         (old) =>
           old &&
           produce(old, (draft) => {
@@ -287,11 +294,13 @@ export function useList(listId: string | undefined) {
   const deleteTodo = useMutation({
     ...OFFLINE_AWARE,
     mutationFn: (todoId: string) =>
-      mutateWithOutbox({ method: 'DELETE', path: `/lists/${listId}/todos/${todoId}` }, (old) =>
-        old &&
-        produce(old, (draft) => {
-          draft.todos = draft.todos.filter((t) => t.id !== todoId);
-        }),
+      mutateWithOutbox(
+        { method: 'DELETE', path: `/lists/${listId}/todos/${todoId}` },
+        (old) =>
+          old &&
+          produce(old, (draft) => {
+            draft.todos = draft.todos.filter((t) => t.id !== todoId);
+          }),
       ),
   });
 
@@ -325,8 +334,9 @@ export function useList(listId: string | undefined) {
     mutationFn: ({ todoId, title }: { todoId: string; title: string }) => {
       const id = crypto.randomUUID();
       // Same "last sibling in the already-sorted array" reasoning as createTodo above.
-      const subtasks = queryClient.getQueryData<GetListResponse>(queryKey)?.todos.find((t) => t.id === todoId)
-        ?.subtasks;
+      const subtasks = queryClient
+        .getQueryData<GetListResponse>(queryKey)
+        ?.todos.find((t) => t.id === todoId)?.subtasks;
       const position = generateKeyBetween(subtasks?.at(-1)?.position ?? null, null);
       const optimisticSubTask: SubTask = {
         id,
@@ -340,7 +350,11 @@ export function useList(listId: string | undefined) {
         updatedAt: now(),
       };
       return mutateWithOutbox<{ subtask: SubTask }>(
-        { method: 'POST', path: `/lists/${listId}/todos/${todoId}/subtasks`, body: { id, title, position } },
+        {
+          method: 'POST',
+          path: `/lists/${listId}/todos/${todoId}/subtasks`,
+          body: { id, title, position },
+        },
         (old) =>
           old &&
           produce(old, (draft) => {
@@ -355,7 +369,15 @@ export function useList(listId: string | undefined) {
   const toggleSubTask = useMutation({
     ...OFFLINE_AWARE,
     // See toggleTodo on why `base` is derived rather than passed.
-    mutationFn: ({ todoId, subtaskId, done }: { todoId: string; subtaskId: string; done: boolean }) =>
+    mutationFn: ({
+      todoId,
+      subtaskId,
+      done,
+    }: {
+      todoId: string;
+      subtaskId: string;
+      done: boolean;
+    }) =>
       mutateWithOutbox<{ subtask: SubTask; hadConflict: boolean }>(
         {
           method: 'PATCH',
@@ -365,7 +387,9 @@ export function useList(listId: string | undefined) {
         (old) =>
           old &&
           produce(old, (draft) => {
-            const subtask = draft.todos.find((t) => t.id === todoId)?.subtasks.find((s) => s.id === subtaskId);
+            const subtask = draft.todos
+              .find((t) => t.id === todoId)
+              ?.subtasks.find((s) => s.id === subtaskId);
             if (subtask) {
               subtask.done = done;
               subtask.updatedAt = now();
@@ -401,7 +425,9 @@ export function useList(listId: string | undefined) {
         (old) =>
           old &&
           produce(old, (draft) => {
-            const subtask = draft.todos.find((t) => t.id === todoId)?.subtasks.find((s) => s.id === subtaskId);
+            const subtask = draft.todos
+              .find((t) => t.id === todoId)
+              ?.subtasks.find((s) => s.id === subtaskId);
             if (subtask) {
               subtask.costCents = costCents;
               subtask.updatedAt = now();
@@ -417,9 +443,21 @@ export function useList(listId: string | undefined) {
   // See reorderTodo above — same idea, one level down.
   const reorderSubTask = useMutation({
     ...OFFLINE_AWARE,
-    mutationFn: ({ todoId, subtaskId, position }: { todoId: string; subtaskId: string; position: string }) =>
+    mutationFn: ({
+      todoId,
+      subtaskId,
+      position,
+    }: {
+      todoId: string;
+      subtaskId: string;
+      position: string;
+    }) =>
       mutateWithOutbox<{ subtask: SubTask; hadConflict: boolean }>(
-        { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, body: { position } },
+        {
+          method: 'PATCH',
+          path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`,
+          body: { position },
+        },
         (old) =>
           old &&
           produce(old, (draft) => {

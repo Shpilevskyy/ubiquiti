@@ -7,7 +7,10 @@
 //
 // Soft signal only. The write always applies (whole-record LWW is the specced rule); this just
 // decides whether to tell the client its write landed on top of someone else's.
-export function detectConflict<T extends object>(current: T, base: Partial<T> | undefined): boolean {
+export function detectConflict<T extends object>(
+  current: T,
+  base: Partial<T> | undefined,
+): boolean {
   if (!base) return false;
   return Object.entries(base).some(([field, seen]) => current[field as keyof T] !== seen);
 }

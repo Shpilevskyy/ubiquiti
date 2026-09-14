@@ -7,7 +7,11 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import type { Todo } from '@ubiquiti-todo/shared';
 import { useListActions } from '../context/ListContext';
 import { computeReorderPosition } from '../lib/position';

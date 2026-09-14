@@ -47,14 +47,22 @@ export async function todosRoutes(app: FastifyInstance) {
           if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
             throw error;
           }
-          return prisma.todo.findUniqueOrThrow({ where: { id: request.body.id }, include: todoInclude });
+          return prisma.todo.findUniqueOrThrow({
+            where: { id: request.body.id },
+            include: todoInclude,
+          });
         });
       const serialized = serializeTodo(todo);
       // Broadcasting on the idempotent-retry path too (not just a genuine create) is harmless:
       // useListSocket's TODO_CREATED handler already dedupes by id before applying.
-      app.broadcaster.broadcastToList(request.params.listId, request.clientId, SOCKET_EVENTS.TODO_CREATED, {
-        todo: serialized,
-      });
+      app.broadcaster.broadcastToList(
+        request.params.listId,
+        request.clientId,
+        SOCKET_EVENTS.TODO_CREATED,
+        {
+          todo: serialized,
+        },
+      );
       return { todo: serialized };
     },
   );
@@ -93,9 +101,14 @@ export async function todosRoutes(app: FastifyInstance) {
       }
 
       const serialized = serializeTodo(result.todo);
-      app.broadcaster.broadcastToList(request.params.listId, request.clientId, SOCKET_EVENTS.TODO_UPDATED, {
-        todo: serialized,
-      });
+      app.broadcaster.broadcastToList(
+        request.params.listId,
+        request.clientId,
+        SOCKET_EVENTS.TODO_UPDATED,
+        {
+          todo: serialized,
+        },
+      );
       return { todo: serialized, hadConflict: result.hadConflict };
     },
   );

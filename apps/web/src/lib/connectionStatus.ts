@@ -6,7 +6,8 @@ type Listener = () => void;
 // places: Socket.IO connect/disconnect (wired in useListSocket, where the app's socket lives),
 // the browser's online/offline events (belt and braces — either can fire first), and a failed
 // fetch marking offline immediately rather than waiting for a browser event (wired in api.ts).
-let status: Status = typeof navigator === 'undefined' || navigator.onLine !== false ? 'online' : 'offline';
+let status: Status =
+  typeof navigator === 'undefined' || navigator.onLine !== false ? 'online' : 'offline';
 const listeners = new Set<Listener>();
 
 function setStatus(next: Status) {

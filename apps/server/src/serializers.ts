@@ -1,4 +1,8 @@
-import type { List as PrismaList, SubTask as PrismaSubTask, Todo as PrismaTodo } from '@prisma/client';
+import type {
+  List as PrismaList,
+  SubTask as PrismaSubTask,
+  Todo as PrismaTodo,
+} from '@prisma/client';
 import type { List, SubTask, Todo } from '@ubiquiti-todo/shared';
 
 export function serializeList(list: PrismaList): List {

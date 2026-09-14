@@ -12,6 +12,7 @@
     "start": "npm run start -w @ubiquiti-todo/server",
     "typecheck": "npm run build -w @ubiquiti-todo/shared && tsc --noEmit -p apps/server/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "lint": "biome lint .",
+    "format:check": "biome format .",
     "format": "biome format --write ."
   },
   "devDependencies": {

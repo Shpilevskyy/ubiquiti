@@ -36,7 +36,9 @@ export async function enqueue(
 }
 
 export async function dequeue(listId: string, opId: string): Promise<void> {
-  await update<QueuedOp[]>(storageKey(listId), (queue = []) => queue.filter((op) => op.opId !== opId));
+  await update<QueuedOp[]>(storageKey(listId), (queue = []) =>
+    queue.filter((op) => op.opId !== opId),
+  );
 }
 
 // Returns the op's new attempts count so the caller can compare it against its cap without a

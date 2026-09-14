@@ -1294,7 +1294,9 @@ Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
   a native `confirm()` given the cascade is irreversible.
 - Cost rollup semantics ([tasks/01-cost-tracking-ui.md](tasks/01-cost-tracking-ui.md)): a todo's own
   cost and its subtasks' costs are shown separately — the todo's own `CostInput` plus a
-  "Subtotal: $X" line under its subtasks (only rendered when it has any) — rather than summing
+  "Subtotal: $X" line under its subtasks (rendered only when that subtotal is non-zero, so a todo
+  whose subtasks are all unpriced doesn't carry a permanent "$0.00" — same hide-at-zero rule as the
+  header total below) — rather than summing
   subtask costs into the parent's total. Summing silently would hide the subtasks' contribution
   whenever the parent also carries its own cost. The list header shows one grand total (every
   todo's own cost plus every subtask's, across the list), hidden when zero to match the app's

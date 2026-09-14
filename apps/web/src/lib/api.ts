@@ -40,8 +40,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as ErrorResponse | null;
-    throw new HttpError(res.status, body?.error.message ?? `Request failed with status ${res.status}`);
+    // `error?.message`, not `error.message`: the cast promises this app's error shape, but the
+    // body can come from somewhere that never read that contract — a proxy or platform error page
+    // that happens to be JSON. Reading `.message` off a missing `error` threw a TypeError, which
+    // isn't an HttpError, so the outbox misfiled a definitive failure as a retryable network one.
+    const body = (await res.json().catch(() => null)) as Partial<ErrorResponse> | null;
+    throw new HttpError(
+      res.status,
+      body?.error?.message ?? `Request failed with status ${res.status}`,
+    );
   }
 
   if (res.status === 204) {
@@ -56,7 +63,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // `/lists/${listId}/todos/${todoId}` (no `/api` prefix, matching this file's own convention;
 // the spec's illustrative path example includes it, but there's nothing that reads outbox paths
 // except this function, so the two conventions just need to agree with each other).
-export function sendOp<T>(op: { method: 'POST' | 'PATCH' | 'DELETE'; path: string; body?: unknown }): Promise<T> {
+export function sendOp<T>(op: {
+  method: 'POST' | 'PATCH' | 'DELETE';
+  path: string;
+  body?: unknown;
+}): Promise<T> {
   return request<T>(op.path, {
     method: op.method,
     ...(op.body !== undefined ? { body: JSON.stringify(op.body) } : {}),

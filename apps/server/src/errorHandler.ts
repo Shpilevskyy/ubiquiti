@@ -40,7 +40,9 @@ export function registerErrorHandling(app: FastifyInstance, options: { isProduct
 
     if (statusCode >= 500) {
       request.log.error(error);
-      return reply.code(500).send({ error: { code: 'internal_error', message: 'Something went wrong' } });
+      return reply
+        .code(500)
+        .send({ error: { code: 'internal_error', message: 'Something went wrong' } });
     }
 
     return reply.code(statusCode).send({

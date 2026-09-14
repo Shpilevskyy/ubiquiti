@@ -1,52 +1,52 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
-	"vcs": {
-		"enabled": true,
-		"clientKind": "git",
-		"useIgnoreFile": true
-	},
-	"files": {
-		"ignoreUnknown": false,
-		"includes": ["apps/**", "packages/**", "!**/dist"]
-	},
-	"formatter": {
-		"enabled": true,
-		"indentStyle": "space",
-		"indentWidth": 2,
-		"lineWidth": 100
-	},
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "single"
-		}
-	},
-	"css": {
-		"parser": {
-			"tailwindDirectives": true
-		}
-	},
-	"linter": {
-		"enabled": true,
-		"rules": {
-			"preset": "recommended",
-			"style": {
-				// This codebase uses `!` deliberately and consistently wherever a value's non-nullness
-				// is already guaranteed by an adjacent runtime check (e.g. `listId!` inside a query
-				// gated on `enabled: Boolean(listId)`) rather than re-proving it to the type checker.
-				// Flagging every occurrence would fight an established, locally-justified convention.
-				"noNonNullAssertion": "off"
-			}
-		},
-		"domains": {
-			"react": "recommended"
-		}
-	},
-	"assist": {
-		"enabled": true,
-		"actions": {
-			"source": {
-				"organizeImports": "on"
-			}
-		}
-	}
+  "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": ["apps/**", "packages/**", "!**/dist"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        // This codebase uses `!` deliberately and consistently wherever a value's non-nullness
+        // is already guaranteed by an adjacent runtime check (e.g. `listId!` inside a query
+        // gated on `enabled: Boolean(listId)`) rather than re-proving it to the type checker.
+        // Flagging every occurrence would fight an established, locally-justified convention.
+        "noNonNullAssertion": "off"
+      }
+    },
+    "domains": {
+      "react": "recommended"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
 }

@@ -1,3 +1,16 @@
+# Ubiquiti Todo
+
+A realtime, offline-capable shared todo app.
+
+**Live: https://ubiquiti-635h.onrender.com/** — no sign-up; create a list and open its URL in a
+second browser to see realtime sync and presence. (Free Render instance, so the first request
+after an idle period can take a few seconds to wake.)
+
+The design notes behind the implementation live in [specs/](specs/) — of those,
+[01-architecture.md](specs/01-architecture.md), [05-sync-conflict-resolution.md](specs/05-sync-conflict-resolution.md)
+and [06-offline-sync.md](specs/06-offline-sync.md) cover the parts worth reading first.
+[PROGRESS.md](PROGRESS.md) is the running build log, and [tasks/](tasks/) the backlog it worked
+through.
 
 ## Techstack
 Language: TypeScript
@@ -43,6 +56,7 @@ Other useful scripts (see [package.json](package.json) at the root and in each w
 | `npm run build` | Production build of every workspace |
 | `npm run typecheck` | Type-checks server and web without emitting |
 | `npm run lint` / `npm run format` | Biome lint / format |
+| `npm run format:check` | Biome format check, no writes (what CI runs) |
 | `npm run start` | Runs the production server (applies pending migrations, then serves API + built web app from one process) |
 | `npm run db:migrate -w @ubiquiti-todo/server` | Create/apply a Prisma migration in dev |
 

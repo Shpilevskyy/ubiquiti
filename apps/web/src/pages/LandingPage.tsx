@@ -15,7 +15,10 @@ export function LandingPage() {
   // order, no client-side dedup/merge logic needed) for the list counts this app deals with
   // (tasks/14: a capped list plus "Show more" is enough, no infinite scroll needed).
   const [limit, setLimit] = useState(LISTS_PAGE_SIZE);
-  const listsQuery = useQuery({ queryKey: ['lists', limit], queryFn: () => api.getLists({ limit }) });
+  const listsQuery = useQuery({
+    queryKey: ['lists', limit],
+    queryFn: () => api.getLists({ limit }),
+  });
 
   const deleteList = useMutation({
     mutationFn: (listId: string) => api.deleteList(listId),
@@ -23,7 +26,8 @@ export function LandingPage() {
   });
 
   function handleDeleteList(id: string, listTitle: string) {
-    if (!window.confirm(`Delete "${listTitle}" and everything in it? This can't be undone.`)) return;
+    if (!window.confirm(`Delete "${listTitle}" and everything in it? This can't be undone.`))
+      return;
     deleteList.mutate(id);
   }
 

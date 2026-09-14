@@ -49,12 +49,14 @@ export function useListSocket(listId: string | undefined): Member[] {
     // recipe mutates the draft todo directly (Immer) — reaching into its subtasks array is the
     // one genuinely nested update in this file, so it's the one place that benefits from it.
     function updateTodo(todoId: string, recipe: (todo: Todo) => void) {
-      queryClient.setQueryData<GetListResponse>(queryKey, (old) =>
-        old &&
-        produce(old, (draft) => {
-          const todo = draft.todos.find((t) => t.id === todoId);
-          if (todo) recipe(todo);
-        }),
+      queryClient.setQueryData<GetListResponse>(
+        queryKey,
+        (old) =>
+          old &&
+          produce(old, (draft) => {
+            const todo = draft.todos.find((t) => t.id === todoId);
+            if (todo) recipe(todo);
+          }),
       );
     }
 

@@ -23,7 +23,8 @@ function ListPageContent({ listId }: { listId: string }) {
   const others = useListSocket(listId);
   const connectionStatus = useConnectionStatus();
 
-  const { listQuery, createTodo, deleteList, conflictNotice, dismissConflictNotice } = useListContext();
+  const { listQuery, createTodo, deleteList, conflictNotice, dismissConflictNotice } =
+    useListContext();
 
   // `data` is checked before `isError`, not after: TanStack's 'error' action (query-core's
   // #dispatch) sets `status: 'error'` on ANY failed fetch — including a background refetch on an
@@ -65,7 +66,8 @@ function ListPageContent({ listId }: { listId: string }) {
   }
 
   function handleDeleteList() {
-    if (!window.confirm(`Delete "${list.title}" and everything in it? This can't be undone.`)) return;
+    if (!window.confirm(`Delete "${list.title}" and everything in it? This can't be undone.`))
+      return;
     deleteList.mutate();
   }
 
@@ -82,7 +84,9 @@ function ListPageContent({ listId }: { listId: string }) {
         <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
             <h1 className="min-w-0 truncate text-xl font-semibold text-slate-900">{list.title}</h1>
-            {totalCents > 0 && <span className="text-sm text-slate-400">Total: {formatCents(totalCents)}</span>}
+            {totalCents > 0 && (
+              <span className="text-sm text-slate-400">Total: {formatCents(totalCents)}</span>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

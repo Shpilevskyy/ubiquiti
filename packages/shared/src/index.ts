@@ -14,6 +14,28 @@ export const SOCKET_EVENTS = {
   PRESENCE_UPDATE: 'presence:update',
 } as const;
 
+// Shared field primitives. Declared once so the bound lives in one place rather than being
+// restated (and drifting) at each of the eight body-schema fields that need it.
+//
+// `costCents` is capped at Postgres INTEGER's maximum because that's the column type: a larger
+// value overflowed the column and surfaced as a 500 from the generic error handler, which the
+// client's outbox then treats as a retryable failure — so one mistyped cost blocked the whole
+// FIFO queue for that list until it exhausted its retries. `.min(0)` because a negative cost is
+// meaningless here; lib/cost.ts's parseCostInput already refuses to produce one, and the API
+// should agree with it rather than accept what the UI can't express.
+export const COST_CENTS_MAX = 2_147_483_647;
+const CostCentsSchema = z.number().int().min(0).max(COST_CENTS_MAX);
+
+// Length caps on free-text input. Nothing bounded these before, so the only limit was Fastify's
+// 256KB bodyLimit — a 100KB todo title was accepted happily. Deliberately applied to the *body*
+// schemas only, not to ListSchema/TodoSchema/SubTaskSchema below: those describe rows already in
+// the database (which may predate this cap) and are type sources rather than runtime validators,
+// so tightening them would claim a guarantee about stored data that isn't enforced anywhere.
+const TITLE_MAX = 500;
+const DESCRIPTION_MAX = 20_000;
+const TitleSchema = z.string().min(1).max(TITLE_MAX);
+const DescriptionSchema = z.string().max(DESCRIPTION_MAX);
+
 export const ListSchema = z.object({
   id: z.uuid(),
   title: z.string(),
@@ -54,32 +76,32 @@ export const TodoSchema = z.object({
 export type Todo = z.infer<typeof TodoSchema>;
 
 export const CreateListBodySchema = z.object({
-  title: z.string().min(1),
+  title: TitleSchema,
 });
 export type CreateListBody = z.infer<typeof CreateListBodySchema>;
 
 export const UpdateListBodySchema = z.object({
-  title: z.string().min(1).optional(),
+  title: TitleSchema.optional(),
 });
 export type UpdateListBody = z.infer<typeof UpdateListBodySchema>;
 
 export const CreateTodoBodySchema = z.object({
   id: z.uuid(),
-  title: z.string().min(1),
+  title: TitleSchema,
   position: z.string().min(1),
-  costCents: z.number().int().nullable().optional(),
-  descriptionMd: z.string().nullable().optional(),
+  costCents: CostCentsSchema.nullable().optional(),
+  descriptionMd: DescriptionSchema.nullable().optional(),
 });
 export type CreateTodoBody = z.infer<typeof CreateTodoBodySchema>;
 
 // The fields a PATCH is allowed to write. Declared once so `base` below can't drift out of
 // lockstep with the set of fields that are actually writable.
 const TodoMutableSchema = z.object({
-  title: z.string().min(1),
+  title: TitleSchema,
   done: z.boolean(),
   position: z.string().min(1),
-  costCents: z.number().int().nullable(),
-  descriptionMd: z.string().nullable(),
+  costCents: CostCentsSchema.nullable(),
+  descriptionMd: DescriptionSchema.nullable(),
 });
 export type TodoMutableFields = z.infer<typeof TodoMutableSchema>;
 
@@ -100,17 +122,17 @@ export type UpdateTodoBody = z.infer<typeof UpdateTodoBodySchema>;
 
 export const CreateSubTaskBodySchema = z.object({
   id: z.uuid(),
-  title: z.string().min(1),
+  title: TitleSchema,
   position: z.string().min(1),
-  costCents: z.number().int().nullable().optional(),
+  costCents: CostCentsSchema.nullable().optional(),
 });
 export type CreateSubTaskBody = z.infer<typeof CreateSubTaskBodySchema>;
 
 const SubTaskMutableSchema = z.object({
-  title: z.string().min(1),
+  title: TitleSchema,
   done: z.boolean(),
   position: z.string().min(1),
-  costCents: z.number().int().nullable(),
+  costCents: CostCentsSchema.nullable(),
 });
 export type SubTaskMutableFields = z.infer<typeof SubTaskMutableSchema>;
 
@@ -128,7 +150,11 @@ export type ListParams = z.infer<typeof ListParamsSchema>;
 export const TodoParamsSchema = z.object({ listId: z.uuid(), todoId: z.uuid() });
 export type TodoParams = z.infer<typeof TodoParamsSchema>;
 
-export const SubTaskParamsSchema = z.object({ listId: z.uuid(), todoId: z.uuid(), subtaskId: z.uuid() });
+export const SubTaskParamsSchema = z.object({
+  listId: z.uuid(),
+  todoId: z.uuid(),
+  subtaskId: z.uuid(),
+});
 export type SubTaskParams = z.infer<typeof SubTaskParamsSchema>;
 
 export interface GetListResponse {

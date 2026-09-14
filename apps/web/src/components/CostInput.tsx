@@ -80,7 +80,11 @@ export function CostInput({ costCents, onSave }: CostInputProps) {
       }}
       className="cursor-text rounded-md px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
     >
-      {costCents === null ? <span className="text-slate-400">Add cost…</span> : formatCents(costCents)}
+      {costCents === null ? (
+        <span className="text-slate-400">Add cost…</span>
+      ) : (
+        formatCents(costCents)
+      )}
     </span>
   );
 }

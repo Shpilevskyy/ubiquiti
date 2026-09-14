@@ -10,7 +10,9 @@ interface SubtaskItemProps {
 
 export function SubtaskItem({ subtask }: SubtaskItemProps) {
   const { toggleSubTask, deleteSubTask, updateSubTaskCost } = useListActions();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: subtask.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: subtask.id,
+  });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
   return (
@@ -33,7 +35,11 @@ export function SubtaskItem({ subtask }: SubtaskItemProps) {
           type="checkbox"
           checked={subtask.done}
           onChange={() =>
-            toggleSubTask.mutate({ todoId: subtask.todoId, subtaskId: subtask.id, done: !subtask.done })
+            toggleSubTask.mutate({
+              todoId: subtask.todoId,
+              subtaskId: subtask.id,
+              done: !subtask.done,
+            })
           }
           className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
         />

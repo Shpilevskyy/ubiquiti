@@ -7,7 +7,12 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Todo } from '@ubiquiti-todo/shared';
 import { useListActions } from '../context/ListContext';
@@ -24,8 +29,12 @@ interface TodoItemProps {
 }
 
 export function TodoItem({ todo }: TodoItemProps) {
-  const { toggleTodo, updateTodoDescription, updateTodoCost, deleteTodo, reorderSubTask } = useListActions();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
+  const { toggleTodo, updateTodoDescription, updateTodoCost, deleteTodo, reorderSubTask } =
+    useListActions();
+  const subtotalCents = subtaskSubtotalCents(todo);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: todo.id,
+  });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
   // Subtasks get their own drag context — no cross-todo dragging, per specs/08-drag-and-drop.md.
@@ -42,7 +51,11 @@ export function TodoItem({ todo }: TodoItemProps) {
   }
 
   return (
-    <li ref={setNodeRef} style={style} className={`rounded-lg py-2 ${isDragging ? 'opacity-50' : ''}`}>
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-lg py-2 ${isDragging ? 'opacity-50' : ''}`}
+    >
       <div className="group flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-3">
         <button
           type="button"
@@ -89,12 +102,20 @@ export function TodoItem({ todo }: TodoItemProps) {
         <TodoDescription
           descriptionMd={todo.descriptionMd}
           onSave={(descriptionMd) =>
-            updateTodoDescription.mutate({ todoId: todo.id, descriptionMd, baseDescriptionMd: todo.descriptionMd })
+            updateTodoDescription.mutate({
+              todoId: todo.id,
+              descriptionMd,
+              baseDescriptionMd: todo.descriptionMd,
+            })
           }
         />
       </div>
 
-      <DndContext sensors={subtaskSensors} collisionDetection={closestCenter} onDragEnd={handleSubTaskDragEnd}>
+      <DndContext
+        sensors={subtaskSensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleSubTaskDragEnd}
+      >
         <SortableContext
           items={todo.subtasks.map((subtask) => subtask.id)}
           strategy={verticalListSortingStrategy}
@@ -107,9 +128,13 @@ export function TodoItem({ todo }: TodoItemProps) {
         </SortableContext>
       </DndContext>
 
-      {todo.subtasks.length > 0 && (
+      {/* Hidden at zero rather than whenever the todo has no subtasks: a todo with subtasks that
+          nobody has priced showed "Subtotal: $0.00" on every row, which is noise, and it
+          contradicted the list header's own total — that one already hides when zero, matching how
+          this app treats every optional affordance (presence avatars, the Offline pill). */}
+      {subtotalCents > 0 && (
         <p className="ml-5 mt-1 pl-3 text-xs text-slate-400 sm:ml-7 sm:pl-4">
-          Subtotal: {formatCents(subtaskSubtotalCents(todo))}
+          Subtotal: {formatCents(subtotalCents)}
         </p>
       )}
 

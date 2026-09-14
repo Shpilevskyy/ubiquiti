@@ -46,27 +46,31 @@ export async function listsRoutes(app: FastifyInstance) {
     return response;
   });
 
-  server.get('/api/lists/:listId', { schema: { params: ListParamsSchema } }, async (request, reply) => {
-    const list = await prisma.list.findUnique({
-      where: { id: request.params.listId },
-      include: {
-        todos: {
-          include: { subtasks: { orderBy: { position: 'asc' } } },
-          orderBy: { position: 'asc' },
+  server.get(
+    '/api/lists/:listId',
+    { schema: { params: ListParamsSchema } },
+    async (request, reply) => {
+      const list = await prisma.list.findUnique({
+        where: { id: request.params.listId },
+        include: {
+          todos: {
+            include: { subtasks: { orderBy: { position: 'asc' } } },
+            orderBy: { position: 'asc' },
+          },
         },
-      },
-    });
+      });
 
-    if (!list) {
-      return reply.code(404).send({ error: { code: 'not_found', message: 'List not found' } });
-    }
+      if (!list) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'List not found' } });
+      }
 
-    const response: GetListResponse = {
-      list: serializeList(list),
-      todos: list.todos.map(serializeTodo),
-    };
-    return response;
-  });
+      const response: GetListResponse = {
+        list: serializeList(list),
+        todos: list.todos.map(serializeTodo),
+      };
+      return response;
+    },
+  );
 
   server.patch(
     '/api/lists/:listId',
@@ -86,20 +90,24 @@ export async function listsRoutes(app: FastifyInstance) {
     },
   );
 
-  server.delete('/api/lists/:listId', { schema: { params: ListParamsSchema } }, async (request, reply) => {
-    // deleteMany, not delete, so this is idempotent (deleting an already-gone list still 204s) —
-    // same convention as the todo/subtask deletes, see specs/03-api-rest.md#idempotency-via-client-generated-ids.
-    // Todos/SubTasks cascade via the schema's onDelete: Cascade, no manual cleanup needed.
-    const { count } = await prisma.list.deleteMany({ where: { id: request.params.listId } });
-    if (count > 0) {
-      const payload: ListDeletedPayload = { listId: request.params.listId };
-      app.broadcaster.broadcastToList(
-        request.params.listId,
-        request.clientId,
-        SOCKET_EVENTS.LIST_DELETED,
-        payload,
-      );
-    }
-    return reply.code(204).send();
-  });
+  server.delete(
+    '/api/lists/:listId',
+    { schema: { params: ListParamsSchema } },
+    async (request, reply) => {
+      // deleteMany, not delete, so this is idempotent (deleting an already-gone list still 204s) —
+      // same convention as the todo/subtask deletes, see specs/03-api-rest.md#idempotency-via-client-generated-ids.
+      // Todos/SubTasks cascade via the schema's onDelete: Cascade, no manual cleanup needed.
+      const { count } = await prisma.list.deleteMany({ where: { id: request.params.listId } });
+      if (count > 0) {
+        const payload: ListDeletedPayload = { listId: request.params.listId };
+        app.broadcaster.broadcastToList(
+          request.params.listId,
+          request.clientId,
+          SOCKET_EVENTS.LIST_DELETED,
+          payload,
+        );
+      }
+      return reply.code(204).send();
+    },
+  );
 }
