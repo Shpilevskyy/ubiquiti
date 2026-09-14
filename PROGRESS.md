@@ -301,7 +301,35 @@ reproducing the exact failure mode before and after.
       discarded it (confirmed via no new PATCH network request and unchanged rendered content).
       Clean full build.
 
-## Next up (in rough order, mapped to specs)
+## Next up
+
+**The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
+ordered list.** Each task file is self-contained (context, file:line references, concrete steps,
+verification), sized to one reviewable diff, so a fresh session can pick one up cold.
+
+It came out of a full staff-level code review on 2026-09-12 covering all three workspaces. Summary
+of what it found:
+
+- **Two user stories from [README.md](README.md) are unimplemented**: cost/price tracking
+  (`costCents` exists in the schema, shared zod schemas, serializers and API — with zero UI) and
+  subtask progress. Both are UI-only work on a finished backend. `tasks/01`, `tasks/02`.
+- **Four real defects in the sync/offline layer**: non-atomic IndexedDB read-modify-write in the
+  outbox (loses ops on concurrent offline writes), a non-404 error permanently head-of-line-blocking
+  the FIFO queue, unguarded concurrent flushes with stacking retry timers, and `invalidateQueries`
+  on every mutation without `cancelQueries` (optimistic state can be clobbered by an in-flight
+  refetch). `tasks/03`, `tasks/05`.
+- **Server**: todo/subtask PATCH/DELETE resolve rows by their own id and ignore the parent id in the
+  URL path, so a mismatched `listId` mutates the row but broadcasts to the wrong room; and the
+  version/conflict check is a TOCTOU across two queries. `tasks/04`.
+- **The offline story is half-built**: writes are durable, reads aren't. No service worker and no
+  query persistence, so a reload while offline loses the app entirely even though the outbox
+  survives in IndexedDB. `tasks/13` — the largest single gap against the brief.
+- **Structure**: `useList.ts` is 407 lines doing five jobs; `ListPage` drills 11 props into
+  `TodoList` and 10 into `TodoItem`. `tasks/07`, `tasks/08`.
+- **No linter or formatter anywhere in the repo**, and no `typecheck` script. `tasks/12`.
+- Plus dead code, production hardening, indexes and accessibility — `tasks/09`–`tasks/16`.
+
+Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
 - [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)
 - [ ] Make repo private after reviewer has seen it
 
