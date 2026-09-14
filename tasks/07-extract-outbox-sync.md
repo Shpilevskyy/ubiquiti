@@ -1,6 +1,6 @@
 # 07 — Move the flush scheduler out of `useList` into a plain module
 
-**Status:** not started
+**Status:** done
 **Size:** M
 **Depends on:** [03](03-outbox-reliability.md) (do the correctness fixes first, then move the code —
 moving buggy code and fixing it in one diff makes the review much harder)

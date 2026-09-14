@@ -510,6 +510,39 @@ reproducing the exact failure mode before and after.
       recovery needed (this app holds no real data, see specs/00), but noted here as a reminder to
       create fresh test fixtures rather than reusing/deleting existing ones.
 
+- [x] Move the flush scheduler out of `useList` into a plain module —
+      [tasks/07-extract-outbox-sync.md](tasks/07-extract-outbox-sync.md). `useList.ts` was 407
+      lines doing five jobs; the background flush/retry/poll loop (job 4) had nothing to do with
+      React and, more concretely, ran once per `useList()` call site — the moment a second
+      component called `useList` for the same list it would start a second poller/subscription
+      racing the first over the same IndexedDB queue, which [08](08-list-context.md) was about to
+      make possible.
+      **New `lib/outboxSync.ts`**: a plain module, no React. `start(listId, { onNotice,
+      onInvalidate })` / the function it returns to stop are reference-counted per `listId` via a
+      module-level `Map`, so N callers share exactly one poll interval, one backoff timer, and one
+      `connectionStatus` subscription; callbacks are collected in a `Set` so every registered
+      caller hears every notice/invalidate. `flush()` itself (the retry/backoff/poison-op policy
+      from tasks/03) moved over unchanged — same FIFO loop, same 404/other-4xx/attempts-cap
+      handling, same `reconcile` flag, same "don't gate on connectionStatus's belief" reasoning and
+      the same 15s poll fallback, load-bearing comments moved with the code.
+      **`useList` shrank accordingly**: its effect is now just `return startOutboxSync(listId, {
+      onNotice: showNotice, onInvalidate: invalidate })` on mount/unmount. `mutateWithOutbox`
+      (immediate-send path) and all nine mutations were untouched — only the background loop moved.
+      **`useNotice` hook** (`hooks/useNotice.ts`) pulled the toast/timer state (job 5) out
+      separately, same behavior (keeps the timeout handle so a second notice always gets its own
+      full 4s, per tasks/06) — `useList` now just calls `showNotice`/reads `notice`/`dismissNotice`
+      from it instead of owning `useState`/`useRef` directly.
+      **Verified**: clean full build. Browser-verified against a second, isolated dev server (the
+      shared one from another session was left untouched) on a fresh test list: offline → add two
+      todos → reconnect delivered both in order with no flicker, survived a hard reload; queued a
+      third op offline and *never* dispatched an `online` event — the 15s poll alone delivered it
+      (confirmed via the network log) and cleared the "Offline" pill. Then the point of the
+      refactor: from the browser console, dynamically imported the exact `outboxSync`/`outbox`
+      modules the running app uses, enqueued a fake op for a synthetic list id, and called `start`
+      twice with two distinct callback objects — exactly one network request was made (not two),
+      and both callbacks' `onNotice` fired once each, confirming N callers fan out from a single
+      shared loop rather than each running their own.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

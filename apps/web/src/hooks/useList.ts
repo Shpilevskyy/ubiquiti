@@ -1,27 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { produce } from 'immer';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GetListResponse, SubTask, Todo } from '@ubiquiti-todo/shared';
+import { useNotice } from './useNotice';
 import { api, HttpError, sendOp } from '../lib/api';
 import { connectionStatus } from '../lib/connectionStatus';
-import { dequeue, enqueue, getQueue, recordAttempt, type QueuedOp } from '../lib/outbox';
+import { dequeue, enqueue, type QueuedOp } from '../lib/outbox';
+import { start as startOutboxSync } from '../lib/outboxSync';
 
-const FLUSH_RETRY_BASE_MS = 2000;
-const FLUSH_RETRY_MAX_MS = 30000;
-// Safety net beyond the specific permanent-failure cases (404, other 4xx) enumerated below: bounds
-// *any* failure mode that would otherwise retry forever, including ones introduced later.
-const MAX_FLUSH_ATTEMPTS = 10;
 const DISCARDED_MESSAGE = 'A change could not be saved and was discarded';
-// Belt-and-braces beyond the spec's two triggers: browsers are inconsistent about firing the
-// online/offline DOM events for a *real* network change (as opposed to devtools-simulated
-// offline) — Chrome in particular can miss them, so a queued op could otherwise sit stuck until
-// the user manually reloads. Polling regardless of what connectionStatus currently believes makes
-// this self-healing without depending on any single event actually firing.
-const FLUSH_POLL_MS = 15000;
-
 const CONFLICT_MESSAGE = 'This item was also edited elsewhere';
-const FLUSH_CONFLICT_MESSAGE = 'Some changes were also edited elsewhere';
 const now = () => new Date().toISOString();
 
 type MutateResult<T> = { sent: true; response: T } | { sent: false };
@@ -54,7 +43,7 @@ export function useList(listId: string | undefined) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const queryKey = ['list', listId];
-  const [notice, setNotice] = useState<string | null>(null);
+  const { notice, showNotice, dismissNotice } = useNotice();
 
   const listQuery = useQuery({
     queryKey,
@@ -64,9 +53,9 @@ export function useList(listId: string | undefined) {
     // error just delays the "not found" state by several seconds of default backoff.
     retry: false,
     // These both default to true and both fire off the *same* window online/reconnect signal
-    // flushOutbox below listens to. Left enabled, a refetch could win the race against the flush
-    // and silently overwrite a still-queued optimistic change with (stale) server truth before it
-    // ever gets sent — flushOutbox's own invalidate() is the only refetch this query should get.
+    // lib/outboxSync's flush loop listens to. Left enabled, a refetch could win the race against
+    // the flush and silently overwrite a still-queued optimistic change with (stale) server truth
+    // before it ever gets sent — the flush's own invalidate is the only refetch this query should get.
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     // Every mutation already opts into 'always' (OFFLINE_AWARE below) rather than TanStack's
@@ -78,18 +67,6 @@ export function useList(listId: string | undefined) {
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
-
-  // A second notice arriving before the first's 4s elapses used to be cut short by the first
-  // notice's own stale timer (no handle was kept, so nothing cleared it) — tasks/06. Keeping the
-  // handle and clearing it before scheduling a new one means each notice always gets its full
-  // duration; the effect below also clears it on unmount.
-  const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const showNotice = (message: string) => {
-    clearTimeout(noticeTimeoutRef.current);
-    setNotice(message);
-    noticeTimeoutRef.current = window.setTimeout(() => setNotice(null), 4000);
-  };
-  useEffect(() => () => clearTimeout(noticeTimeoutRef.current), []);
 
   // See specs/05-sync-conflict-resolution.md's stale-write indicator: the server always applies
   // the write and just tells us whether it clobbered a change we hadn't seen yet. Soft signal
@@ -113,8 +90,8 @@ export function useList(listId: string | undefined) {
   //    there's no successful response to reconcile from, and the local optimistic state is now
   //    known to be wrong, not just stale.
   //  - offline, or the send itself fails (network/5xx): leave it queued. The failed-fetch path in
-  //    api.ts already flips the connectivity signal; flushOutbox below is what eventually sends
-  //    this once we're back online.
+  //    api.ts already flips the connectivity signal; lib/outboxSync's flush loop is what
+  //    eventually sends this once we're back online.
   async function mutateWithOutbox<T>(
     op: Pick<QueuedOp, 'method' | 'path' | 'body'>,
     applyOptimistic: (old: GetListResponse | undefined) => GetListResponse | undefined,
@@ -145,7 +122,7 @@ export function useList(listId: string | undefined) {
       } else if (err instanceof HttpError && err.status < 500) {
         // Any other 4xx (e.g. a rejected body) is a permanent failure, not a transient one —
         // retrying it would just fail again. Drop it here rather than letting it sit queued for
-        // flushOutbox to reach the same conclusion later.
+        // the flush loop to reach the same conclusion later.
         await dequeue(listId!, queued.opId);
         showNotice(DISCARDED_MESSAGE);
         invalidate();
@@ -155,117 +132,16 @@ export function useList(listId: string | undefined) {
     }
   }
 
-  // Flushing the outbox (specs/06-offline-sync.md): replay queued ops for this list in FIFO
-  // order, awaiting each response before sending the next (preserves the order they were made
-  // in, and means a create always lands before a PATCH/DELETE that depends on it). Triggered by
-  // connectionStatus going online (aggregating the spec's two triggers — Socket.IO
-  // connect/reconnect and the browser online event) for promptness, once on mount for a queue
-  // left over from a previous session, and by a periodic poll (see FLUSH_POLL_MS) as a fallback
-  // for when neither event fires. Deliberately doesn't gate on connectionStatus's belief that
-  // we're online — a failed sendOp already means "leave it queued," so attempting when we might
-  // actually be offline just costs one wasted request rather than something worth guarding
-  // against, and not gating on it is what makes the poll fallback work at all.
-  const flushRetryDelayRef = useRef(FLUSH_RETRY_BASE_MS);
-  const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // flushOutbox has four triggers (mount, connectionStatus, the poll, its own backoff timer) with
-  // no natural mutual exclusion. Without this guard, two overlapping runs both read the queue,
-  // both send the same head-of-queue op, and race each other's dequeue — this is also what makes
-  // the outbox.ts atomicity bug (tasks/03) reachable in practice, not just enqueue-vs-flush.
-  const isFlushingRef = useRef(false);
-
-  // `reconcile` forces the closing invalidate() even when the queue was empty. Needed on
-  // reconnect: while the socket was down this client missed every broadcast for the list, and
-  // disabling refetchOnReconnect/refetchOnWindowFocus above (correctly, to stop them racing this
-  // flush) removed the refetch that used to repair that. Without this, a network blip with
-  // nothing queued leaves the client silently stale until it remounts.
-  async function flushOutbox({ reconcile = false }: { reconcile?: boolean } = {}) {
-    if (!listId || isFlushingRef.current) return;
-    isFlushingRef.current = true;
-    // Whatever triggered this run supersedes any backoff retry scheduled by a previous run — at
-    // most one timer should ever be outstanding, and this run's own outcome (success, or a fresh
-    // schedule below) is the only one that should matter from here.
-    clearTimeout(flushTimeoutRef.current);
-    flushTimeoutRef.current = undefined;
-
-    try {
-      let sentAny = false;
-      // flushOutbox otherwise ignores sendOp's response entirely, so a queued PATCH that comes
-      // back hadConflict: true during a reconnect replay never surfaced the toast a live edit
-      // would've gotten (tasks/05). One op per notice would be noisy for a whole backlog replaying
-      // at once, so this aggregates to a single notice for the flush instead.
-      let hadConflictAny = false;
-      while (true) {
-        const [op] = await getQueue(listId);
-        if (!op) break;
-
-        try {
-          const response = await sendOp<{ hadConflict?: boolean }>(op);
-          await dequeue(listId, op.opId);
-          sentAny = true;
-          if (response?.hadConflict) hadConflictAny = true;
-          // A successful request is the strongest possible evidence we're online — feeds back
-          // into the belief connectionStatus tracks (and the "Offline" pill reads), so a
-          // successful poll fallback flush also self-heals a pill left stuck offline by a browser
-          // that never fired the online event in the first place.
-          connectionStatus.markOnline();
-        } catch (err) {
-          if (err instanceof HttpError && err.status === 404) {
-            await dequeue(listId, op.opId);
-            showNotice('This item no longer exists');
-            continue;
-          }
-          if (err instanceof HttpError && err.status < 500) {
-            // Any other 4xx (e.g. a rejected body) is permanent, not transient — retrying it
-            // every poll would head-of-line-block every op queued behind it forever.
-            await dequeue(listId, op.opId);
-            showNotice(DISCARDED_MESSAGE);
-            continue;
-          }
-          // Network error / 5xx: worth retrying, but capped so a failure mode not enumerated
-          // above still can't retry forever.
-          const attempts = await recordAttempt(listId, op.opId);
-          if (attempts >= MAX_FLUSH_ATTEMPTS) {
-            await dequeue(listId, op.opId);
-            showNotice(DISCARDED_MESSAGE);
-            continue;
-          }
-          // Stop here, leave the rest queued, retry the whole flush later with backoff rather
-          // than looping tightly against a server/connection that's down.
-          flushTimeoutRef.current = setTimeout(() => flushOutbox({ reconcile }), flushRetryDelayRef.current);
-          flushRetryDelayRef.current = Math.min(flushRetryDelayRef.current * 2, FLUSH_RETRY_MAX_MS);
-          if (sentAny) invalidate();
-          if (hadConflictAny) showNotice(FLUSH_CONFLICT_MESSAGE);
-          return;
-        }
-      }
-
-      flushRetryDelayRef.current = FLUSH_RETRY_BASE_MS;
-      // Ordering matters: the invalidate only runs once the queue has drained, so a refetch can
-      // never overwrite a still-unsent optimistic change.
-      if (sentAny || reconcile) invalidate();
-      if (hadConflictAny) showNotice(FLUSH_CONFLICT_MESSAGE);
-    } finally {
-      isFlushingRef.current = false;
-    }
-  }
-
+  // The background flush loop (poll, retry/backoff, the outbox's send policy) lives in
+  // lib/outboxSync.ts — a plain module, no React, reference-counted so N callers of useList for
+  // the same list share exactly one loop rather than each starting its own poller/subscription
+  // racing over the same IndexedDB queue (tasks/07). This effect just registers for the two things
+  // the loop can't do itself: showing a notice, and resyncing the cache once a batch drains.
   useEffect(() => {
     if (!listId) return;
-    flushOutbox();
-    const unsubscribe = connectionStatus.subscribe(() => {
-      // Coming back online: flush anything queued, then resync regardless, since broadcasts sent
-      // while we were disconnected are gone for good.
-      if (connectionStatus.getStatus() === 'online') flushOutbox({ reconcile: true });
-    });
-    const pollId = setInterval(() => flushOutbox(), FLUSH_POLL_MS);
-    return () => {
-      unsubscribe();
-      clearInterval(pollId);
-      clearTimeout(flushTimeoutRef.current);
-    };
-    // Deliberately keyed on listId alone: flushOutbox always reads listId fresh (not
-    // stale-closure-sensitive here), and re-keying on it would tear down and re-subscribe/
-    // re-poll on every render instead of just when the list actually changes.
+    return startOutboxSync(listId, { onNotice: showNotice, onInvalidate: invalidate });
+    // Deliberately keyed on listId alone: onNotice/onInvalidate close over stable dependencies
+    // (queryClient, the notice hook's stable setter) that don't need their own re-subscription.
   }, [listId]);
 
   // TanStack Query has its own network-awareness — by default (networkMode: 'online') it pauses
@@ -603,6 +479,6 @@ export function useList(listId: string | undefined) {
     deleteSubTask,
     deleteList,
     conflictNotice: notice,
-    dismissConflictNotice: () => setNotice(null),
+    dismissConflictNotice: dismissNotice,
   };
 }
