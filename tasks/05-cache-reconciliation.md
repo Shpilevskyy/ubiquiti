@@ -1,6 +1,6 @@
 # 05 — Stop per-mutation full-list refetch clobbering optimistic state
 
-**Status:** not started
+**Status:** done — see PROGRESS.md Completed
 **Size:** M
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -77,8 +77,8 @@ write the decision into PROGRESS.md's Decisions section. Don't leave it implicit
 
 ## Done when
 
-- [ ] `cancelQueries` precedes every optimistic write
-- [ ] Single-mutation success reconciles from the response, not a full refetch
-- [ ] Post-flush full invalidate retained
-- [ ] `version` stays correct after mutations (no false conflict toasts)
-- [ ] Flush-time conflict signal either surfaced or documented as deliberately dropped
+- [x] `cancelQueries` precedes every optimistic write
+- [x] Single-mutation success reconciles from the response, not a full refetch
+- [x] Post-flush full invalidate retained
+- [x] `version` stays correct after mutations (no false conflict toasts)
+- [x] Flush-time conflict signal either surfaced or documented as deliberately dropped

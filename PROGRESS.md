@@ -440,6 +440,41 @@ reproducing the exact failure mode before and after.
       cases (including the false-positive-on-different-field case fixed 2026-09-14) still pass.
       Clean full build.
 
+- [x] Stop per-mutation full-list refetch clobbering optimistic state —
+      [tasks/05-cache-reconciliation.md](tasks/05-cache-reconciliation.md).
+      **The flicker**: every successful mutation called `invalidate()` (a full-list refetch), and
+      `mutateWithOutbox` never called `cancelQueries` first. Toggle A, its refetch starts, toggle B
+      lands optimistically, A's refetch resolves with a pre-B snapshot and overwrites the whole
+      `GetListResponse` — B visually reverts until its own refetch lands. Fixed with
+      `await queryClient.cancelQueries({ queryKey })` at the top of `mutateWithOutbox`, before the
+      optimistic `setQueryData` — TanStack Query's documented fix for exactly this race.
+      **The cost**: separately, every mutation — even a single checkbox toggle — refetched the
+      entire list. The server already returns the full updated row (`{ todo }`/`{ subtask }`, or
+      with `hadConflict` for a PATCH), so `mutateWithOutbox` now takes an optional `applyResponse`
+      callback that splices that row into the cache in place (`replaceTodo`/`replaceSubTask`,
+      shared helpers) instead of invalidating. DELETE returns `204`/no body and needs no
+      reconciliation — the optimistic removal was already correct. The 404/other-4xx failure paths
+      still call a full `invalidate()`: there's no successful response to reconcile from there, and
+      the optimistic state is known wrong, not just stale.
+      **Reconnect resync kept as-is**: `flushOutbox`'s `invalidate()` (including the `reconcile`
+      flag forcing it even on an empty queue, landed 2026-09-14) is untouched — after replaying a
+      backlog the optimistic state may be many ops stale, so a full resync is genuinely correct
+      there, unlike the single-mutation case.
+      **Decided and implemented, not left implicit**: `flushOutbox` previously ignored `sendOp`'s
+      response entirely, so a queued PATCH that came back `hadConflict: true` during a reconnect
+      replay never surfaced the toast a live edit gets. Chose to surface it rather than document it
+      away — silently dropping a "this clobbered someone's edit" signal seemed worse than one extra
+      toast. Aggregated into a single "Some changes were also edited elsewhere" notice per flush
+      (not one per op) so a multi-op backlog replay can't spam the single-notice toast UI.
+      **Verified in-browser**: rapidly toggled three different todos in succession — no flicker or
+      revert, and the network log showed no `GET` after any of the `PATCH`es, only after the
+      deliberate reconnect-flush test below; confirmed via a direct API fetch that `version`
+      advances correctly and the reconciled row (not the optimistic guess) is what lands in the
+      cache; queued an op offline, reconnected, and confirmed the flush's `invalidate()` still fired
+      (a `GET` followed the replayed `PATCH`) with the final state matching the server; hand-queued
+      an op with a deliberately stale `base`, reconnected, and confirmed the aggregated conflict
+      toast fired. Clean full build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
@@ -522,6 +557,13 @@ Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
   whenever the parent also carries its own cost. The list header shows one grand total (every
   todo's own cost plus every subtask's, across the list), hidden when zero to match the app's
   existing pattern for optional affordances (presence avatars, the Offline pill).
+- Flush-time conflict signal ([tasks/05-cache-reconciliation.md](tasks/05-cache-reconciliation.md)):
+  `flushOutbox` used to ignore `sendOp`'s response entirely, so a queued PATCH replayed on
+  reconnect that came back `hadConflict: true` never told the user — an offline stretch could
+  silently clobber a collaborator's edit with no signal at all. Chose to surface it (a single
+  aggregated "Some changes were also edited elsewhere" toast per flush, not one per op) rather than
+  document the silence as acceptable — an extra toast after reconnecting seemed like the smaller
+  cost next to a silently lost edit.
 
 ## Open questions
 

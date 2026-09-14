@@ -21,9 +21,34 @@ const DISCARDED_MESSAGE = 'A change could not be saved and was discarded';
 const FLUSH_POLL_MS = 15000;
 
 const CONFLICT_MESSAGE = 'This item was also edited elsewhere';
+const FLUSH_CONFLICT_MESSAGE = 'Some changes were also edited elsewhere';
 const now = () => new Date().toISOString();
 
 type MutateResult<T> = { sent: true; response: T } | { sent: false };
+
+// Reconciling a successful mutation's response into the cache in place (tasks/05), instead of
+// invalidating and refetching the whole list. Pure functions on GetListResponse — no closure over
+// listId/queryClient needed, unlike the outbox helpers below.
+function replaceTodo(old: GetListResponse | undefined, todo: Todo): GetListResponse | undefined {
+  return (
+    old &&
+    produce(old, (draft) => {
+      const index = draft.todos.findIndex((t) => t.id === todo.id);
+      if (index !== -1) draft.todos[index] = todo;
+    })
+  );
+}
+
+function replaceSubTask(old: GetListResponse | undefined, subtask: SubTask): GetListResponse | undefined {
+  return (
+    old &&
+    produce(old, (draft) => {
+      const todo = draft.todos.find((t) => t.id === subtask.todoId);
+      const index = todo?.subtasks.findIndex((s) => s.id === subtask.id) ?? -1;
+      if (todo && index !== -1) todo.subtasks[index] = subtask;
+    })
+  );
+}
 
 export function useList(listId: string | undefined) {
   const queryClient = useQueryClient();
@@ -63,17 +88,28 @@ export function useList(listId: string | undefined) {
   // The outbox pattern (specs/06-offline-sync.md): apply the change to the cache immediately (so
   // the UI never waits on the network), persist it to IndexedDB, then try to actually send it if
   // we believe we're online. What happens next depends on the outcome:
-  //  - success: dequeue, then refetch to reconcile the optimistic guess with server truth
-  //    (real timestamps/version/etc) — cheap since we know we're online.
-  //  - the parent was deleted elsewhere (404): drop the op (retrying it can never succeed) and
-  //    tell the user, per spec.
+  //  - success: dequeue, then merge the server's returned row into the cache in place
+  //    (applyResponse) — replaces the optimistic guess with real timestamps/version/etc without
+  //    refetching the whole list. tasks/05: a per-mutation full-list GET doesn't scale with list
+  //    size, and — the more important half — a *later* mutation's optimistic update could land
+  //    while an earlier mutation's refetch was still in flight, which would then resolve with a
+  //    stale snapshot and clobber it. cancelQueries below removes that race at its source rather
+  //    than papering over it.
+  //  - the parent was deleted elsewhere (404), or any other 4xx: drop the op (retrying it can
+  //    never succeed) and tell the user. Falls back to a full invalidate() here specifically —
+  //    there's no successful response to reconcile from, and the local optimistic state is now
+  //    known to be wrong, not just stale.
   //  - offline, or the send itself fails (network/5xx): leave it queued. The failed-fetch path in
   //    api.ts already flips the connectivity signal; flushOutbox below is what eventually sends
   //    this once we're back online.
   async function mutateWithOutbox<T>(
     op: Pick<QueuedOp, 'method' | 'path' | 'body'>,
     applyOptimistic: (old: GetListResponse | undefined) => GetListResponse | undefined,
+    applyResponse?: (old: GetListResponse | undefined, response: T) => GetListResponse | undefined,
   ): Promise<MutateResult<T>> {
+    // Cancel any in-flight refetch for this list first — otherwise it can resolve after this
+    // optimistic write with a snapshot taken before it, and silently overwrite it (tasks/05).
+    await queryClient.cancelQueries({ queryKey });
     queryClient.setQueryData<GetListResponse>(queryKey, applyOptimistic);
     const queued = await enqueue(listId!, op);
 
@@ -84,7 +120,9 @@ export function useList(listId: string | undefined) {
     try {
       const response = await sendOp<T>(queued);
       await dequeue(listId!, queued.opId);
-      invalidate();
+      if (applyResponse) {
+        queryClient.setQueryData<GetListResponse>(queryKey, (old) => applyResponse(old, response));
+      }
       return { sent: true, response };
     } catch (err) {
       if (err instanceof HttpError && err.status === 404) {
@@ -138,14 +176,20 @@ export function useList(listId: string | undefined) {
 
     try {
       let sentAny = false;
+      // flushOutbox otherwise ignores sendOp's response entirely, so a queued PATCH that comes
+      // back hadConflict: true during a reconnect replay never surfaced the toast a live edit
+      // would've gotten (tasks/05). One op per notice would be noisy for a whole backlog replaying
+      // at once, so this aggregates to a single notice for the flush instead.
+      let hadConflictAny = false;
       while (true) {
         const [op] = await getQueue(listId);
         if (!op) break;
 
         try {
-          await sendOp(op);
+          const response = await sendOp<{ hadConflict?: boolean }>(op);
           await dequeue(listId, op.opId);
           sentAny = true;
+          if (response?.hadConflict) hadConflictAny = true;
           // A successful request is the strongest possible evidence we're online — feeds back
           // into the belief connectionStatus tracks (and the "Offline" pill reads), so a
           // successful poll fallback flush also self-heals a pill left stuck offline by a browser
@@ -177,6 +221,7 @@ export function useList(listId: string | undefined) {
           flushTimeoutRef.current = setTimeout(() => flushOutbox({ reconcile }), flushRetryDelayRef.current);
           flushRetryDelayRef.current = Math.min(flushRetryDelayRef.current * 2, FLUSH_RETRY_MAX_MS);
           if (sentAny) invalidate();
+          if (hadConflictAny) showNotice(FLUSH_CONFLICT_MESSAGE);
           return;
         }
       }
@@ -185,6 +230,7 @@ export function useList(listId: string | undefined) {
       // Ordering matters: the invalidate only runs once the queue has drained, so a refetch can
       // never overwrite a still-unsent optimistic change.
       if (sentAny || reconcile) invalidate();
+      if (hadConflictAny) showNotice(FLUSH_CONFLICT_MESSAGE);
     } finally {
       isFlushingRef.current = false;
     }
@@ -237,13 +283,14 @@ export function useList(listId: string | undefined) {
         updatedAt: now(),
         subtasks: [],
       };
-      return mutateWithOutbox(
+      return mutateWithOutbox<{ todo: Todo }>(
         { method: 'POST', path: `/lists/${listId}/todos`, body: { id, title, position } },
         (old) =>
           old &&
           produce(old, (draft) => {
             draft.todos.push(optimisticTodo);
           }),
+        (old, response) => replaceTodo(old, response.todo),
       );
     },
   });
@@ -253,7 +300,7 @@ export function useList(listId: string | undefined) {
     // `base` is what this client last saw for the field it's writing — for a toggle that's
     // definitionally the negation of the new value, so callers don't have to pass it.
     mutationFn: ({ todoId, done }: { todoId: string; done: boolean }) =>
-      mutateWithOutbox<{ hadConflict: boolean }>(
+      mutateWithOutbox<{ todo: Todo; hadConflict: boolean }>(
         { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { done, base: { done: !done } } },
         (old) =>
           old &&
@@ -264,6 +311,7 @@ export function useList(listId: string | undefined) {
               todo.updatedAt = now();
             }
           }),
+        (old, response) => replaceTodo(old, response.todo),
       ),
     onSuccess: (result) => {
       if (result.sent) noteConflict(result.response.hadConflict);
@@ -286,7 +334,7 @@ export function useList(listId: string | undefined) {
       descriptionMd: string;
       baseDescriptionMd: string | null;
     }) =>
-      mutateWithOutbox<{ hadConflict: boolean }>(
+      mutateWithOutbox<{ todo: Todo; hadConflict: boolean }>(
         {
           method: 'PATCH',
           path: `/lists/${listId}/todos/${todoId}`,
@@ -301,6 +349,7 @@ export function useList(listId: string | undefined) {
               todo.updatedAt = now();
             }
           }),
+        (old, response) => replaceTodo(old, response.todo),
       ),
     onSuccess: (result) => {
       if (result.sent) noteConflict(result.response.hadConflict);
@@ -320,7 +369,7 @@ export function useList(listId: string | undefined) {
       costCents: number | null;
       baseCostCents: number | null;
     }) =>
-      mutateWithOutbox<{ hadConflict: boolean }>(
+      mutateWithOutbox<{ todo: Todo; hadConflict: boolean }>(
         {
           method: 'PATCH',
           path: `/lists/${listId}/todos/${todoId}`,
@@ -335,6 +384,7 @@ export function useList(listId: string | undefined) {
               todo.updatedAt = now();
             }
           }),
+        (old, response) => replaceTodo(old, response.todo),
       ),
     onSuccess: (result) => {
       if (result.sent) noteConflict(result.response.hadConflict);
@@ -360,7 +410,7 @@ export function useList(listId: string | undefined) {
   const reorderTodo = useMutation({
     ...OFFLINE_AWARE,
     mutationFn: ({ todoId, position }: { todoId: string; position: number }) =>
-      mutateWithOutbox(
+      mutateWithOutbox<{ todo: Todo; hadConflict: boolean }>(
         { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { position } },
         (old) =>
           old &&
@@ -370,6 +420,10 @@ export function useList(listId: string | undefined) {
             todo.position = position;
             draft.todos.sort((a, b) => a.position - b.position);
           }),
+        // The response's position is the exact value just sent (server doesn't recompute it), so
+        // the order the optimistic sort above already settled on stays correct — no need to
+        // re-sort again here, just swap the row in place like every other reconciliation.
+        (old, response) => replaceTodo(old, response.todo),
       ),
   });
 
@@ -390,7 +444,7 @@ export function useList(listId: string | undefined) {
         createdAt: now(),
         updatedAt: now(),
       };
-      return mutateWithOutbox(
+      return mutateWithOutbox<{ subtask: SubTask }>(
         { method: 'POST', path: `/lists/${listId}/todos/${todoId}/subtasks`, body: { id, title, position } },
         (old) =>
           old &&
@@ -398,6 +452,7 @@ export function useList(listId: string | undefined) {
             const todo = draft.todos.find((t) => t.id === todoId);
             if (todo) todo.subtasks.push(optimisticSubTask);
           }),
+        (old, response) => replaceSubTask(old, response.subtask),
       );
     },
   });
@@ -406,7 +461,7 @@ export function useList(listId: string | undefined) {
     ...OFFLINE_AWARE,
     // See toggleTodo on why `base` is derived rather than passed.
     mutationFn: ({ todoId, subtaskId, done }: { todoId: string; subtaskId: string; done: boolean }) =>
-      mutateWithOutbox<{ hadConflict: boolean }>(
+      mutateWithOutbox<{ subtask: SubTask; hadConflict: boolean }>(
         {
           method: 'PATCH',
           path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`,
@@ -421,6 +476,7 @@ export function useList(listId: string | undefined) {
               subtask.updatedAt = now();
             }
           }),
+        (old, response) => replaceSubTask(old, response.subtask),
       ),
     onSuccess: (result) => {
       if (result.sent) noteConflict(result.response.hadConflict);
@@ -441,7 +497,7 @@ export function useList(listId: string | undefined) {
       costCents: number | null;
       baseCostCents: number | null;
     }) =>
-      mutateWithOutbox<{ hadConflict: boolean }>(
+      mutateWithOutbox<{ subtask: SubTask; hadConflict: boolean }>(
         {
           method: 'PATCH',
           path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`,
@@ -456,6 +512,7 @@ export function useList(listId: string | undefined) {
               subtask.updatedAt = now();
             }
           }),
+        (old, response) => replaceSubTask(old, response.subtask),
       ),
     onSuccess: (result) => {
       if (result.sent) noteConflict(result.response.hadConflict);
@@ -466,7 +523,7 @@ export function useList(listId: string | undefined) {
   const reorderSubTask = useMutation({
     ...OFFLINE_AWARE,
     mutationFn: ({ todoId, subtaskId, position }: { todoId: string; subtaskId: string; position: number }) =>
-      mutateWithOutbox(
+      mutateWithOutbox<{ subtask: SubTask; hadConflict: boolean }>(
         { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, body: { position } },
         (old) =>
           old &&
@@ -477,6 +534,7 @@ export function useList(listId: string | undefined) {
             subtask.position = position;
             todo.subtasks.sort((a, b) => a.position - b.position);
           }),
+        (old, response) => replaceSubTask(old, response.subtask),
       ),
   });
 
