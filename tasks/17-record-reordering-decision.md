@@ -1,6 +1,6 @@
 # 17 — Record the reordering decision (intent vs. value)
 
-**Status:** not started
+**Status:** done, see PROGRESS.md
 **Size:** XS — documentation only, no code
 **Depends on:** —
 **Source:** Architecture review 2026-09-14
@@ -47,5 +47,5 @@ the reasoning.
 
 ## Done when
 
-- [ ] PROGRESS.md Decisions records the choice, the reasoning, and the accepted cost
-- [ ] specs/08 says positions are computed client-side and why
+- [x] PROGRESS.md Decisions records the choice, the reasoning, and the accepted cost
+- [x] specs/08 says positions are computed client-side and why

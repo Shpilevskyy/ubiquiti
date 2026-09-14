@@ -23,6 +23,32 @@ newPosition = (prevSibling.position + nextSibling.position) / 2
 This means a reorder only ever touches **one row** (the moved item), regardless of list length —
 no need for a batch-reorder endpoint or rewriting every sibling's position.
 
+## Decision: client computes the position, not just the drag
+
+`computeReorderPosition` runs on the client, which sends a computed **value**
+(`PATCH { position: 1.5 }`) rather than an **intent** (`PATCH { after: todoId }`) for the server to
+resolve against current truth. This was evaluated, not defaulted into
+([tasks/17](../tasks/17-record-reordering-decision.md)):
+
+Intent-based reordering degrades badly under this app's offline-replay requirement
+([06-offline-sync.md](06-offline-sync.md)). `{ after: Y }` replayed once back online, after `Y` was
+deleted during the offline window, is ambiguous — the server has to invent a fallback, and
+whatever it picks will sometimes be wrong. `{ position: 1.5 }` always means something, even if the
+neighbors moved by the time it's applied — it degrades to "roughly where the user dropped it,"
+which is the graceful failure.
+
+**Accepted cost**: two clients dragging concurrently each compute a position against their own
+(possibly stale) view of the sibling array. Under this app's whole-record last-write-wins rule, the
+winning value was computed against neighbors that may no longer be adjacent — or may no longer
+exist — by the time it lands, so the item can end up somewhere neither user intended, not merely
+"the other person's drag won." That's a real, demoable failure mode in a two-user session, which is
+exactly the scenario this app gets shown in — but the offline requirement makes value-based the
+better trade regardless, not the lazy one.
+
+[tasks/18](../tasks/18-fractional-string-indexing.md) changes the position *key type* (float →
+fractional string) to fix a different problem (precision collisions, below) — it doesn't revisit
+this client-vs-server decision.
+
 ## Known limitation: float precision
 
 Repeated insertions into the same gap halve the remaining space each time; after enough

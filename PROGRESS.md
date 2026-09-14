@@ -1107,6 +1107,20 @@ Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
   favor of this one — same `localStorage` underneath either way, since the "async" in the name
   describes the persister's uniform interface, not a requirement on the storage it wraps.
 
+- Reordering: client-computed position, not server-resolved intent
+  ([tasks/17-record-reordering-decision.md](tasks/17-record-reordering-decision.md)). Drag-and-drop
+  sends a computed value (`PATCH { position: 1.5 }`), not an intent (`PATCH { after: todoId }`) for
+  the server to resolve. Evaluated, not defaulted into: intent-based reordering degrades badly
+  under this app's offline-replay requirement — `{ after: Y }` replayed after `Y` was deleted
+  during the offline window is ambiguous and forces the server to invent a fallback that's
+  sometimes wrong, while `{ position: 1.5 }` always means something even if neighbors moved,
+  degrading gracefully to "roughly where the user dropped it." **Accepted cost**: two clients
+  dragging concurrently each compute against their own possibly-stale sibling view, so under
+  whole-record LWW the winning value can land the item somewhere neither user intended — a real,
+  demoable failure mode in exactly the two-user scenario this app gets shown in. The offline
+  requirement makes this the better trade anyway, not the lazy one. See
+  [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md#decision-client-computes-the-position-not-just-the-drag).
+
 ## Open questions
 
 - (none currently)
