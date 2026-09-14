@@ -13,6 +13,14 @@ function listRoom(listId: string) {
   return `list:${listId}`;
 }
 
+// Lists are deliberately public with no auth (see PROGRESS.md Decisions), so `list:join` accepts
+// any list id from any socket — that's intentional, not a bug. But nothing previously bounded how
+// many sockets could connect at all, and presence state (PresenceStore) is unbounded in-memory per
+// connection (tasks/14). A flat cap on total connections is simpler and more honest than a
+// per-list one here: this app has no concept of "too many real viewers of one list" worth
+// engineering around, just "too many sockets, period."
+const MAX_SOCKET_CONNECTIONS = 500;
+
 export function registerSocketHandlers(io: SocketIOServer, log: FastifyBaseLogger) {
   const presence = new PresenceStore();
 
@@ -20,6 +28,14 @@ export function registerSocketHandlers(io: SocketIOServer, log: FastifyBaseLogge
     const payload: PresenceUpdatePayload = { members: presence.getMembers(listId) };
     io.to(listRoom(listId)).emit(SOCKET_EVENTS.PRESENCE_UPDATE, payload);
   }
+
+  io.use((_socket, next) => {
+    if (io.engine.clientsCount > MAX_SOCKET_CONNECTIONS) {
+      next(new Error('Too many connections'));
+      return;
+    }
+    next();
+  });
 
   io.on('connection', (socket) => {
     log.info(`socket connected: ${socket.id}`);

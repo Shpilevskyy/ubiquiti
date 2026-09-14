@@ -2,6 +2,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyHelmet from '@fastify/helmet';
+import fastifyRateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { Server as SocketIOServer } from 'socket.io';
 import { CLIENT_ID_HEADER } from '@ubiquiti-todo/shared';
@@ -16,12 +18,34 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webDist = path.resolve(__dirname, '../../web/dist');
 const isProduction = process.env.NODE_ENV === 'production';
 
-const app = Fastify({ logger: true });
+const app = Fastify({
+  logger: true,
+  // Public, unauthenticated, internet-facing API with no per-field length limits in the shared
+  // zod schemas yet — the largest legitimate payload here is a markdown description. 256KB is
+  // generous for that and well below Fastify's 1MB default (tasks/14).
+  bodyLimit: 256 * 1024,
+});
 
 // Must run before any routes are registered: Fastify bakes the current error/not-found
 // handlers into each route's context at registration time, so routes added earlier would
 // otherwise keep the default handlers instead of ours.
 registerErrorHandling(app, { isProduction });
+
+// Security headers (tasks/14). CSP's defaults (script-src/style-src/connect-src all falling back
+// to default-src 'self') work unmodified here because everything is same-origin: the built JS is
+// loaded via a same-origin <script src>, React's inline style={} attributes are covered by
+// style-src's default 'unsafe-inline', and the Socket.IO client's XHR/WebSocket traffic goes to
+// this same origin too. No directive overrides needed — verified against the production build,
+// not just dev, since static files are only served through Fastify (and therefore only get this
+// header) in production.
+await app.register(fastifyHelmet);
+
+// Global rate limit (tasks/14) — this is a public API with no auth, so nothing else bounds how
+// fast one caller can hit it. The default error response is a plain `Error` with `.statusCode`
+// set to 429, which flows through the same generic error handler as everything else
+// (errorHandler.ts's STATUS_TO_CODE already maps 429), so no custom errorResponseBuilder is
+// needed to keep the unified `{ error: { code, message } }` shape.
+await app.register(fastifyRateLimit, { max: 100, timeWindow: '1 minute' });
 
 // Lets routes declare `schema: { body, params }` using the zod schemas from packages/shared
 // directly instead of a hand-rolled `Schema.safeParse` + manual 400 in every handler (tasks/09).

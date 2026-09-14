@@ -920,6 +920,39 @@ reproducing the exact failure mode before and after.
       Postgres for this — verified the failure path via a bad connection string instead so the
       already-running dev server on port 3001 (another session's) wasn't disrupted.
 
+- [x] Rate limiting, security headers, body cap, and a Socket.IO connection cap (item 2/4 of
+      [tasks/14-server-hardening.md](tasks/14-server-hardening.md); item 4, `GET /api/lists`
+      pagination, still to do). All in [index.ts](apps/server/src/index.ts) except the socket cap.
+      **`@fastify/helmet`** registered with its default config — no directive overrides needed,
+      since everything here is same-origin (built JS via a same-origin `<script src>`, React's
+      inline `style={}` covered by CSP's default `style-src 'unsafe-inline'`, Socket.IO's
+      XHR/WebSocket traffic same-origin too). Verified against the production build specifically
+      (static files, and therefore this header, are Fastify-served only in production) — no CSP
+      violations, list load and realtime both unaffected.
+      **`@fastify/rate-limit`**, global, `100/minute`. Its default error is a plain `Error` with
+      `.statusCode = 429`, which — since it's thrown, not directly serialized by the plugin —
+      flows through the same generic `setErrorHandler` as everything else
+      ([errorHandler.ts](apps/server/src/errorHandler.ts)'s `STATUS_TO_CODE` already had `429`
+      mapped), so no custom `errorResponseBuilder` was needed to keep the unified shape. Confirmed
+      by reading the plugin's source before trusting that, not just by testing after the fact.
+      **`bodyLimit: 256 * 1024`** on the Fastify constructor — well below the 1MB default; the
+      largest legitimate payload today is a markdown description, no size-limited elsewhere in the
+      shared zod schemas.
+      **Socket.IO connection cap** ([socket.ts](apps/server/src/socket.ts)): a flat
+      `MAX_SOCKET_CONNECTIONS = 500` checked in an `io.use` middleware via
+      `io.engine.clientsCount`, rejecting the handshake past that. Flat rather than per-list: this
+      app has no notion of "too many real viewers of one list" worth engineering around, just "too
+      many sockets, period" — `list:join` accepting any list id with no auth stays intentional
+      (lists are public, see Decisions below), unchanged.
+      **Verified** against an isolated production-mode instance: `curl -I` confirmed the CSP/
+      `X-Content-Type-Options`/`X-Frame-Options` headers present; a >256KB POST body returned `413`
+      with `{"error":{"code":"payload_too_large",...}}`; 98 rapid requests to `/healthz` triggered
+      `429` with `{"error":{"code":"too_many_requests","message":"Rate limit exceeded, retry in 50
+      seconds"}}` — the unified shape, confirming no custom error handling was needed. Restarted
+      with a clean rate-limit window (it's in-memory, per-IP) and browser-verified the production
+      build end-to-end: list loads, no CSP console errors, and realtime still applies a spoofed
+      second client's change live with no reload. Full build/typecheck/lint clean.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

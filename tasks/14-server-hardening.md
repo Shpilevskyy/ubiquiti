@@ -1,7 +1,7 @@
 # 14 — Graceful shutdown, rate limit, helmet, body cap, real healthz, pagination
 
-**Status:** in progress — items 1 (graceful shutdown) and 3 (real healthz) landed, see
-PROGRESS.md; items 2 (rate limit/helmet/body cap) and 4 (pagination) still to do
+**Status:** in progress — items 1 (graceful shutdown), 2 (rate limit/helmet/body cap/socket cap),
+and 3 (real healthz) landed, see PROGRESS.md; item 4 (`GET /api/lists` pagination) still to do
 **Size:** M
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -75,10 +75,10 @@ ownership, this grows without limit and is trivially abusable.
 ## Done when
 
 - [x] Clean shutdown on SIGTERM/SIGINT, sockets and Prisma closed
-- [ ] Rate limiting, security headers and a body cap in place
-- [x] All new error paths return the unified error shape (healthz's 503 does; rate limit/body cap
-      still to verify once item 2 lands)
+- [x] Rate limiting, security headers and a body cap in place (plus a Socket.IO connection cap,
+      the task's own "also" item)
+- [x] All new error paths return the unified error shape — verified 413 and 429 directly
 - [x] `/healthz` reflects real database reachability
 - [ ] `GET /api/lists` paginated
-- [x] Production build verified for items 1 and 3 (shutdown + healthz); items 2 and 4 still need
-      their own production-mode pass
+- [x] Production build verified, including static assets and realtime, for items 1-3; item 4
+      still needs its own pass once it lands
