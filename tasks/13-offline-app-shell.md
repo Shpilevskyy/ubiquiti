@@ -1,6 +1,7 @@
 # 13 — PWA app shell + query persistence so a cold offline load works
 
-**Status:** not started
+**Status:** in progress — piece 1 (app shell) landed, see PROGRESS.md; piece 2 (query
+persistence) still to do
 **Size:** L
 **Depends on:** [06](06-offline-edge-cases.md) (the paused-query crash becomes far more reachable
 once cold offline loads are possible — fix it first)

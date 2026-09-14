@@ -796,6 +796,51 @@ reproducing the exact failure mode before and after.
       `checkbox.labels[0].textContent`; confirmed the drag-handle glyph is `aria-hidden`. No
       console errors.
 
+- [x] PWA app shell (piece 1/2 of
+      [tasks/13-offline-app-shell.md](tasks/13-offline-app-shell.md); piece 2, query persistence,
+      still to do) — precaches the built shell so a cold offline load can render at all, closing
+      half of the gap the task describes: the outbox makes offline *writes* durable, but nothing
+      previously made a reload survive being offline in the first place.
+      **`vite-plugin-pwa`** added to `apps/web`, configured in
+      [vite.config.ts](apps/web/vite.config.ts): `generateSW` strategy (the default), disabled in
+      dev (`devOptions.enabled: false` — a service worker adds nothing over Vite's own HMR
+      locally and only confuses dev testing), `registerType: 'prompt'` rather than `'autoUpdate'`
+      so a redeploy surfaces a reload control instead of silently swapping the cached shell out
+      from under an open tab — new
+      [`UpdatePrompt.tsx`](apps/web/src/components/UpdatePrompt.tsx) uses the plugin's
+      `virtual:pwa-register/react` hook to render that control, mounted in
+      [App.tsx](apps/web/src/App.tsx). A web app manifest is generated inline in the config
+      (name/theme/icons); two placeholder indigo-500 PNG icons added at
+      `apps/web/public/pwa-{192,512}x512.png` (192 and a 512 duplicated with `purpose: maskable`)
+      since the app had no icon asset of any kind before this.
+      **The one thing the task flagged as a real hazard** — the service worker's navigation
+      fallback swallowing `/api` or `/socket.io` traffic — is handled via
+      `workbox.navigateFallbackDenylist: [/^\/api\//, /^\/socket\.io\//]`; confirmed in the built
+      `dist/sw.js`'s `NavigationRoute` that both are in the `denylist` alongside the existing
+      server-side fallback ([errorHandler.ts](apps/server/src/errorHandler.ts), which already
+      serves `index.html` for unmatched non-`/api` GETs in production — the two now agree).
+      **Verified**: full monorepo build clean; `dist/sw.js` precaches the expected 7 entries (JS,
+      CSS, `index.html`, both icons, the manifest); `dist/index.html` gets the `<link
+      rel="manifest">` injected automatically, with no separate inlined registration script since
+      `useRegisterSW` handles that from the bundle itself (confirmed via grep — no
+      `registerSW.js` reference, but `workbox-window`'s registration call is present in the main
+      bundle). Smoke-tested the production build end-to-end in-browser (existing list load,
+      todo/subtask toggle, no new console errors) to confirm the plugin didn't regress anything.
+      **Could not verify end-to-end in this session**: actually registering the service worker.
+      This session's browser tool is a sandboxed/embedded browser that refuses all
+      `navigator.serviceWorker.register()` calls with a generic "unknown error fetching script" —
+      confirmed this is the browser, not the app, by fetching `/sw.js` directly (200, correct
+      `application/javascript` content-type, correct body) while the identical URL fails only
+      through the Service Worker registration API. So the actual "go offline, hard reload, app
+      still loads" scenario — the task's real acceptance test — is unverified by me and needs a
+      real browser (Chrome/Safari devtools offline toggle, or actually disabling Wi-Fi) before
+      this can be considered done. Flagging this explicitly rather than claiming a UI outcome I
+      couldn't actually observe.
+      **Not done, left for piece 2**: `@tanstack/query-sync-storage-persister` +
+      `persistQueryClient` — without it, the offline-cached shell currently has an empty
+      TanStack cache, so a cold offline load will render the app frame but not the list contents.
+      Piece 1 alone is a real but partial step; the task isn't done until piece 2 lands.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
