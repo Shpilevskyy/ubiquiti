@@ -543,6 +543,40 @@ reproducing the exact failure mode before and after.
       and both callbacks' `onNotice` fired once each, confirming N callers fan out from a single
       shared loop rather than each running their own.
 
+- [x] `ListProvider` context to kill prop drilling; push subtask-input state down —
+      [tasks/08-list-context.md](tasks/08-list-context.md). `useList` returned 13 values that
+      `ListPage` mapped into 11 props on `TodoList`, which mapped those into 10 props on
+      `TodoItem`, which passed more down to `SubtaskItem` — roughly a third of `ListPage` was prop
+      plumbing, and every one of those callbacks was a freshly allocated inline arrow.
+      **New `context/ListContext.tsx`**: `ListProvider` calls `useList(listId)` exactly once;
+      `useListContext()` exposes the full result (used by `ListPage` for `listQuery`,
+      `conflictNotice`, `deleteList`); `useListActions()` exposes just the mutation triggers, which
+      `TodoItem`/`SubtaskItem` now call directly using their own `todo`/`subtask` prop (e.g.
+      `toggleTodo.mutate({ todoId: todo.id, done: !todo.done })`) instead of receiving a
+      todo-id-bound callback prop from three components up. Target prop surface hit exactly:
+      `TodoItem` takes `todo`, `SubtaskItem` takes `subtask`, nothing else.
+      **New `AddSubtaskForm`**: `newSubTaskTitles: Record<string, string>` — previously lifted all
+      the way to `ListPage` even though each entry was read by exactly one `TodoItem`, so a
+      keystroke in any subtask input re-rendered every todo/subtask/`DndContext` on the page — is
+      gone. Each `TodoItem` now renders its own `AddSubtaskForm` owning its own local `useState`,
+      so a keystroke only re-renders that one form.
+      **`ListPage` split**: the outer `ListPage` component just resolves `listId` and renders
+      `<ListProvider>`; a new `ListPageContent` (inside the provider) does everything the old
+      `ListPage` did, reading from `useListContext()` instead of calling `useList` directly.
+      **Step 3 (React.memo / React Compiler) deliberately not done**: the task frames this as
+      "worth considering," contingent on a separate decision (hand-memoize vs. the React Compiler
+      Babel plugin), and none of the task's four "Done when" criteria actually require it — the
+      typing-perf goal is satisfied by localizing input state (above), not by memoizing render
+      output. Revisit if profiling ever shows an unrelated todo/subtask update visibly re-rendering
+      every row (Immer keeps unmodified `Todo`/`SubTask` object references stable across a mutation,
+      so `React.memo` would be effective if added, but nothing today demonstrates it's needed).
+      **Verified** against an isolated dev server (left the other session's shared one on 5173
+      alone): full interaction matrix on a fresh test list — add/toggle/delete todo and subtask,
+      cost input (rollup total updated), description edit (saved on blur, markdown rendered),
+      drag-reorder a todo (persisted across hard reload), two tabs with realtime toggle + presence
+      avatar both applying live, and offline add → reconnect → synced (confirmed via network log).
+      Clean full build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

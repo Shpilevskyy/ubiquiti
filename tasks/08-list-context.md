@@ -1,6 +1,6 @@
 # 08 — `ListProvider` context to kill prop drilling; push input state down
 
-**Status:** not started
+**Status:** done (steps 1–2; step 3's memo/compiler decision deferred — see PROGRESS.md)
 **Size:** M
 **Depends on:** [07](07-extract-outbox-sync.md) (the context will call `useList`, and without 07's
 reference-counted sync loop a second call site spawns a second poller)

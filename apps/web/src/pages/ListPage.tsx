@@ -1,38 +1,30 @@
 import { useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { TodoList } from '../components/TodoList';
+import { ListProvider, useListContext } from '../context/ListContext';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
-import { useList } from '../hooks/useList';
 import { useListSocket } from '../hooks/useListSocket';
 import { formatCents, listTotalCents } from '../lib/cost';
 
 export function ListPage() {
   const { listId } = useParams<{ listId: string }>();
+  if (!listId) return null;
+
+  return (
+    <ListProvider listId={listId}>
+      <ListPageContent listId={listId} />
+    </ListProvider>
+  );
+}
+
+function ListPageContent({ listId }: { listId: string }) {
   const [newTodoTitle, setNewTodoTitle] = useState('');
-  const [newSubTaskTitles, setNewSubTaskTitles] = useState<Record<string, string>>({});
 
   const others = useListSocket(listId);
   const connectionStatus = useConnectionStatus();
 
-  const {
-    listQuery,
-    createTodo,
-    toggleTodo,
-    updateTodoDescription,
-    updateTodoCost,
-    deleteTodo,
-    reorderTodo,
-    createSubTask,
-    toggleSubTask,
-    updateSubTaskCost,
-    reorderSubTask,
-    deleteSubTask,
-    deleteList,
-    conflictNotice,
-    dismissConflictNotice,
-  } = useList(listId);
+  const { listQuery, createTodo, deleteList, conflictNotice, dismissConflictNotice } = useListContext();
 
-  if (!listId) return null;
   if (listQuery.isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -68,14 +60,6 @@ export function ListPage() {
     if (!newTodoTitle.trim()) return;
     createTodo.mutate(newTodoTitle.trim());
     setNewTodoTitle('');
-  }
-
-  function handleAddSubTask(event: FormEvent, todoId: string) {
-    event.preventDefault();
-    const title = (newSubTaskTitles[todoId] ?? '').trim();
-    if (!title) return;
-    createSubTask.mutate({ todoId, title });
-    setNewSubTaskTitles((titles) => ({ ...titles, [todoId]: '' }));
   }
 
   function handleDeleteList() {
@@ -122,33 +106,7 @@ export function ListPage() {
           </div>
         </div>
 
-        <TodoList
-          todos={todos}
-          onToggleTodo={(todoId, done) => toggleTodo.mutate({ todoId, done })}
-          onUpdateTodoDescription={(todoId, descriptionMd, baseDescriptionMd) =>
-            updateTodoDescription.mutate({ todoId, descriptionMd, baseDescriptionMd })
-          }
-          onUpdateTodoCost={(todoId, costCents, baseCostCents) =>
-            updateTodoCost.mutate({ todoId, costCents, baseCostCents })
-          }
-          onDeleteTodo={(todoId) => deleteTodo.mutate(todoId)}
-          onReorderTodo={(todoId, position) => reorderTodo.mutate({ todoId, position })}
-          onToggleSubTask={(todoId, subtaskId, done) =>
-            toggleSubTask.mutate({ todoId, subtaskId, done })
-          }
-          onDeleteSubTask={(todoId, subtaskId) => deleteSubTask.mutate({ todoId, subtaskId })}
-          onUpdateSubTaskCost={(todoId, subtaskId, costCents, baseCostCents) =>
-            updateSubTaskCost.mutate({ todoId, subtaskId, costCents, baseCostCents })
-          }
-          onReorderSubTask={(todoId, subtaskId, position) =>
-            reorderSubTask.mutate({ todoId, subtaskId, position })
-          }
-          newSubTaskTitles={newSubTaskTitles}
-          onSubTaskTitleChange={(todoId, value) =>
-            setNewSubTaskTitles((titles) => ({ ...titles, [todoId]: value }))
-          }
-          onAddSubTask={handleAddSubTask}
-        />
+        <TodoList todos={todos} />
 
         <form onSubmit={handleAddTodo} className="mt-6 flex gap-2 border-t border-slate-200 pt-6">
           <input
