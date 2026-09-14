@@ -61,6 +61,29 @@ apps — avoids drift between client and server types without needing codegen.
 | Local persistence (offline) | IndexedDB via a thin wrapper (`idb-keyval`) | storage primitive only; outbox/replay/idempotency logic is ours — see [06-offline-sync.md](06-offline-sync.md) |
 | Testing | Vitest + React Testing Library (web), Vitest + Supertest (server) | fast, TS-native |
 
+### Realtime transport: why not Server-Sent Events
+
+Almost all realtime traffic here is one-way, server → client (`list:updated`, `todo:*`,
+`subtask:*`, `presence:update` — seven of the eight events in
+[04-realtime-protocol.md](04-realtime-protocol.md); the only client → server traffic is
+`list:join`/`list:leave`), which is exactly SSE's shape: browser-native auto-reconnect with no
+client library, a smaller bundle, and better behavior through restrictive proxies than a
+WebSocket-based protocol. Considered and rejected in favor of Socket.IO
+([tasks/21](../tasks/21-record-transport-decision.md)), for three reasons:
+
+- **Presence needs client→server identity at join time and server-side disconnect detection** to
+  evict members — Socket.IO's connection lifecycle events give this for free; SSE would mean
+  inferring liveness from a dropped response stream.
+- **The rooms API is the per-list fan-out**, already written and working
+  ([socket.ts](../apps/server/src/socket.ts)) — SSE would mean hand-rolling an equivalent
+  subscriber registry.
+- **Socket.IO's reconnection is load-bearing for the offline layer** —
+  [`connectionStatus`](../apps/web/src/lib/connectionStatus.ts) is fed directly by its
+  `connect`/`disconnect` events.
+
+**Accepted cost**: a client bundle (the app's JS is already ~650KB, flagged by the Vite build) and
+a protocol some corporate proxies handle worse than plain SSE.
+
 ## Deployment topology
 
 **Assumption (please confirm or override):** single Render web service running the Node server

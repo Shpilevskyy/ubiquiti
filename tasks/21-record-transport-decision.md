@@ -1,6 +1,6 @@
 # 21 — Record the realtime transport decision (Socket.IO vs. SSE)
 
-**Status:** not started
+**Status:** done, see specs/01-architecture.md
 **Size:** XS — documentation only, no code
 **Depends on:** —
 **Source:** Architecture review 2026-09-14
@@ -43,4 +43,4 @@ about changing it.
 
 ## Done when
 
-- [ ] specs/01 records SSE as the considered alternative, why Socket.IO won, and the accepted cost
+- [x] specs/01 records SSE as the considered alternative, why Socket.IO won, and the accepted cost

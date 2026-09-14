@@ -1007,6 +1007,16 @@ reproducing the exact failure mode before and after.
       deploy, so nothing about that path changed. Browser-verified list load/ordering with no
       regression, no console errors. Full build/typecheck/lint clean.
 
+- [x] Recorded the realtime transport decision (Socket.IO vs. SSE) —
+      [tasks/21-record-transport-decision.md](tasks/21-record-transport-decision.md). Docs only,
+      no code change. Almost all realtime traffic here is one-way server→client, SSE's exact
+      shape, and was considered and rejected in favor of Socket.IO for three reasons: presence
+      needs client→server identity at join and server-side disconnect detection (Socket.IO's
+      connection lifecycle gives this for free), the rooms API is the per-list fan-out already
+      written, and `connectionStatus` is fed directly by Socket.IO's own reconnect events. Full
+      reasoning and the accepted cost (bundle size, worse behavior through some corporate proxies)
+      now in [specs/01-architecture.md](specs/01-architecture.md#realtime-transport-why-not-server-sent-events).
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
