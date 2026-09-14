@@ -1,6 +1,6 @@
 # 11 — Replace the arbitrary-variant class soup with `@tailwindcss/typography`
 
-**Status:** not started
+**Status:** done
 **Size:** S
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -58,8 +58,8 @@ inside a narrow indented row.
 
 ## Done when
 
-- [ ] `@tailwindcss/typography` registered via `@plugin` in `index.css`
-- [ ] Arbitrary-variant string replaced with `prose prose-sm` + minimal overrides
-- [ ] Tables, nested lists and `hr` render correctly (they don't today)
-- [ ] Raw HTML still renders as escaped text
-- [ ] Row density unchanged
+- [x] `@tailwindcss/typography` registered via `@plugin` in `index.css`
+- [x] Arbitrary-variant string replaced with `prose prose-sm` + minimal overrides
+- [x] Tables, nested lists and `hr` render correctly (they don't today)
+- [x] Raw HTML still renders as escaped text
+- [x] Row density unchanged

@@ -75,7 +75,7 @@ export function TodoDescription({ descriptionMd, onSave }: TodoDescriptionProps)
   return (
     <div
       onClick={startEditing}
-      className="mt-1 cursor-text rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 [&_a]:text-indigo-600 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_:is(h1,h2)]:mb-1 [&_:is(h1,h2)]:text-sm [&_:is(h1,h2)]:font-semibold [&_:is(h1,h2)]:text-slate-900 [&_:is(h3,h4,h5,h6)]:mb-1 [&_:is(h3,h4,h5,h6)]:font-semibold [&_:is(h3,h4,h5,h6)]:text-slate-900 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:mb-1 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4"
+      className="prose prose-sm prose-slate mt-1 max-w-none cursor-text rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold prose-h1:text-sm prose-h2:text-sm prose-p:my-1 prose-blockquote:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-1 prose-hr:my-2"
     >
       {descriptionMd ? (
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{descriptionMd}</ReactMarkdown>

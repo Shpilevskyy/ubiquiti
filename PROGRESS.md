@@ -660,6 +660,29 @@ reproducing the exact failure mode before and after.
       still applies live via the socket, confirming the connection handshake works without it.
       `curl /api/hello` now 404s in the unified error shape.
 
+- [x] Replaced the arbitrary-variant class soup on todo descriptions with
+      `@tailwindcss/typography` — [tasks/11-tailwind-typography.md](tasks/11-tailwind-typography.md).
+      `TodoDescription.tsx`'s ~400-character `[&_selector]` className (which had already proven
+      brittle — the earlier markdown work missed headings entirely and needed a follow-up patch)
+      is gone. `@tailwindcss/typography` registered via `@plugin "@tailwindcss/typography";` in
+      [index.css](apps/web/src/index.css) (the v4 pattern, since this repo has no
+      `tailwind.config.js` and uses the `@tailwindcss/vite` plugin) instead of a v3
+      `tailwind.config.js` `plugins` array. The className is now `prose prose-sm prose-slate
+      max-w-none` plus a handful of `prose-*` density overrides (`prose-headings:my-1
+      prose-headings:text-xs`, `prose-p:my-1`, etc.) to keep the row compact — `prose` alone is
+      tuned for article width/spacing, not a nested row in a todo list.
+      **Fixes real gaps the old class list had**: no `[&_table]`/`[&_hr]` rules at all, so GFM
+      tables (which `remark-gfm` already enables) and horizontal rules rendered unstyled.
+      **Security boundary re-verified, not just carried over**: still no `rehype-raw`; pasting
+      `<img src=x onerror="alert(1)">` renders as visible literal text with `document.querySelector('img[onerror]')`
+      confirming zero `<img>` elements created.
+      Browser-verified end-to-end on a fresh test list/todo covering the full range from the task's
+      checklist: h1–h6 (distinguishably sized/weighted, confirmed not to blow out row density), bold,
+      italic, inline code, a link, nested unordered list, ordered list, blockquote, `hr` (confirmed
+      via computed style — a 1px border, subtle but present), and a GFM table (header row + borders
+      render correctly, previously unstyled). Clean full build (`tsc` + `vite build`), no console
+      errors.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
