@@ -75,7 +75,7 @@ a known one.
 
 Not scheduled. Interim step:
 
-- [ ] PROGRESS.md records the single-instance requirement and why
+- [x] PROGRESS.md records the single-instance requirement and why
 
 If picked up:
 

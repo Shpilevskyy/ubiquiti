@@ -41,6 +41,17 @@ reproducing the exact failure mode before and after.
   tier; recreate + re-point `DATABASE_URL` if this runs longer than that). Local dev still uses
   `docker compose up -d postgres` (see [docker-compose.yml](docker-compose.yml)) with
   `apps/server/.env` copied from `.env.example`.
+- **Single-instance deployment is a requirement, not an accident** — the interim step of
+  [tasks/22-horizontal-scale-redis.md](tasks/22-horizontal-scale-redis.md), recorded here rather
+  than left unexamined. Two pieces of realtime state — Socket.IO's rooms and `PresenceStore`
+  ([apps/server/src/presence.ts](apps/server/src/presence.ts)) — live in the memory of one Node
+  process; a second instance would silently split both (users on the same list routed to different
+  instances stop seeing each other's changes, and presence shows only who's connected to whichever
+  instance answered). Render's free tier already runs exactly one Web Service instance, so this
+  isn't a live constraint today, but scaling past one instance, a zero-downtime deploy that runs two
+  instances concurrently during rollover, or moving to a platform that multi-processes by default
+  would all break realtime silently rather than loudly. tasks/22 (parked) has the fix — a Redis
+  adapter plus moving presence out of process memory — when any of those triggers happens.
 
 ## Completed
 
@@ -1143,6 +1154,45 @@ reproducing the exact failure mode before and after.
       concurrently) still returns the same row unchanged. Re-ran the now-fixed
       `scripts/verify-conflict.py` — all 10 assertions pass. Full monorepo build/typecheck/lint
       clean.
+
+- [x] **Production incident**: Render deploy broken by an unrun production backfill, fixed same
+      session. Pushing the tasks/19 commit above triggered a Render auto-deploy that never came
+      up — `prisma migrate deploy` (run automatically by the `start` script on every deploy, see
+      Environment above) failed with `P3009`, blocking that migration and every migration after it,
+      so the app never started (0 open ports).
+      **Root cause, unrelated to tasks/19**: tasks/18 (fractional string indexing, landed earlier
+      the same day) shipped two schema migrations with a required data-backfill script
+      (`backfillPositionKeys.ts`) that had to run *between* them, against whatever database was
+      being migrated. That ran and was verified locally, but was never actually run against
+      Render's production database before the second migration
+      (`20260914140100_finalize_position_as_string`) shipped. That migration's own guard — added
+      specifically to prevent this — did exactly its job: it hard-aborted rather than renaming an
+      all-NULL `positionKey` column into place, but a failed migration also permanently blocks
+      `prisma migrate deploy` from proceeding at all (by design — every migration tool refuses to
+      blindly retry a failed one, since that could paper over a real problem) until a human
+      resolves it. So the safety mechanism worked; the process gap was that the manual step it
+      depends on silently never happened against the one database that mattered.
+      **Fixed by**: running `backfillPositionKeys.ts` against Render's production database (confirmed
+      first: only 6 Todo + 7 SubTask rows existed, all genuinely missing a `positionKey`, not zero as
+      a fresh/empty DB would've had — this was live, if small, real data, so recreating the database
+      from scratch was considered and rejected in favor of the surgical fix once that was known),
+      verified zero rows still `NULL` afterward, then `prisma migrate resolve --rolled-back` on the
+      failed migration (safe because Postgres DDL is transactional — the `RAISE EXCEPTION` inside a
+      `DO` block aborted the migration's transaction before any `ALTER TABLE` ran, so nothing partial
+      was ever applied) followed by `prisma migrate deploy` to apply it for real. Confirmed after:
+      `/healthz` returns `200 ok`, `GET /api/lists` returns the same pre-incident lists (no data
+      lost).
+      **Two of these commands were blocked by the harness's own auto-mode safety classifier**
+      (writes to a shared/production resource) even after explicit user authorization in chat and a
+      known-safe, idempotent script; per its own guidance this wasn't something to route around, so
+      the user ran `migrate resolve` and the final `migrate deploy` directly.
+      **Follow-up recorded**, not yet built: `prisma migrate deploy` has no way to express "run this
+      data script between these two schema migrations," so nothing short of remembering to do it
+      manually would have prevented this specific class of gap. If a future migration needs the same
+      shape (a data backfill that must run before a later schema change can finalize), fold the
+      backfill into the deploy path itself — e.g. have the `start` script run the backfill script
+      before `prisma migrate deploy` for that one deploy — rather than relying on a human to run it
+      against production out-of-band before pushing.
 
 ## Next up
 
