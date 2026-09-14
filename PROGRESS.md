@@ -891,6 +891,35 @@ reproducing the exact failure mode before and after.
       it — not a bug in this repo, just a trap specific to re-testing against a long-lived local
       server across edits without restarting it.
 
+- [x] Graceful shutdown + real `/healthz` (items 1 and 3/4 of
+      [tasks/14-server-hardening.md](tasks/14-server-hardening.md); items 2 and 4 — rate
+      limit/helmet/body cap, and `GET /api/lists` pagination — still to do). Both in
+      [index.ts](apps/server/src/index.ts).
+      **Graceful shutdown**: Render sends `SIGTERM` on every deploy (this app auto-deploys on every
+      push), which previously dropped in-flight requests and open Socket.IO connections abruptly
+      and left Prisma's connection pool undrained. New `SIGTERM`/`SIGINT` handler: `io.close()`
+      first (actively ends every open socket, not just stops accepting new ones — also closes the
+      shared `http.Server` as a side effect), then `app.close()` (Fastify's own plugin/route
+      teardown; tolerates the server already being closed — confirmed by reading its source, it
+      swallows `ERR_SERVER_NOT_RUNNING`), then `prisma.$disconnect()` last so the pool stays alive
+      until in-flight requests are done. A 10s force-exit timeout (`unref()`'d, so it can't itself
+      keep the process alive) backstops a hung connection; Render kills the process outright after
+      its own grace period regardless, so this is just an attempt at a clean exit first.
+      **Real `/healthz`**: was `return 'ok'` unconditionally. Now runs `prisma.$queryRaw\`SELECT
+      1\``, returning `503` in the unified error shape on failure. Matters concretely here: the
+      Render Postgres is on the free tier and expires 30 days after creation (see Environment
+      above) — an honest healthz is what would surface that rather than the app reporting healthy
+      while every real request 500s.
+      **Verified**: full build/typecheck/lint clean. Sent `SIGTERM` to a running production-mode
+      instance — logged the shutdown, exited `0`, well under the 10s timeout; repeated with a
+      request fired within ~20ms of the signal and confirmed it still completed (`200`, not a
+      connection reset). Pointed an isolated instance at an unreachable `DATABASE_URL` (not the
+      shared local Postgres, to avoid disrupting another session's dev server also using it) and
+      confirmed `/healthz` returns `503` with `{"error":{"code":"service_unavailable",...}}`;
+      confirmed `200 ok` against the real database. Did not touch the shared docker-compose
+      Postgres for this — verified the failure path via a bad connection string instead so the
+      already-running dev server on port 3001 (another session's) wasn't disrupted.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

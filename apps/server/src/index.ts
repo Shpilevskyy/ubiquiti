@@ -10,6 +10,7 @@ import { todosRoutes } from './routes/todos.js';
 import { subtasksRoutes } from './routes/subtasks.js';
 import { registerErrorHandling } from './errorHandler.js';
 import { registerSocketHandlers } from './socket.js';
+import { prisma } from './prisma.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webDist = path.resolve(__dirname, '../../web/dist');
@@ -44,7 +45,19 @@ const io = new SocketIOServer(app.server, {
 });
 app.decorate('broadcaster', registerSocketHandlers(io, app.log));
 
-app.get('/healthz', async () => 'ok');
+// Render's health check polls this to decide whether to route traffic here — a healthz that
+// can't see the database is worse than useless (tasks/14): the Render Postgres is on the free
+// tier and expires 30 days after creation (see Environment in PROGRESS.md), and without this
+// check the app would report healthy right up until every request started 500ing.
+app.get('/healthz', async (_request, reply) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return 'ok';
+  } catch (error) {
+    app.log.error(error, 'healthz: database unreachable');
+    return reply.code(503).send({ error: { code: 'service_unavailable', message: 'Database unreachable' } });
+  }
+});
 
 await app.register(listsRoutes);
 await app.register(todosRoutes);
@@ -60,3 +73,42 @@ if (isProduction) {
 const port = Number(process.env.PORT) || 3001;
 
 await app.listen({ port, host: '0.0.0.0' });
+
+// Render sends SIGTERM on every deploy (this app auto-deploys on every push), so this runs far
+// more often than "server crashed" — without it, every deploy would drop in-flight requests and
+// open WebSocket connections abruptly and leave Prisma's connection pool undrained (tasks/14).
+let shuttingDown = false;
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.log.info(`${signal} received, shutting down`);
+
+  // A hung connection (or a client that never completes a WebSocket close handshake) shouldn't be
+  // able to block shutdown forever — Render kills the process outright after its own grace period
+  // regardless, so this just ensures a clean exit path is at least attempted first.
+  const forceExit = setTimeout(() => {
+    app.log.warn('shutdown timed out, forcing exit');
+    process.exit(1);
+  }, 10_000);
+  forceExit.unref();
+
+  try {
+    // io.close() first: it actively ends every open Socket.IO connection (not just stops
+    // accepting new ones), which also closes the shared http.Server underneath it. app.close()
+    // afterward still needs to run for Fastify's own plugin/route teardown — it tolerates the
+    // server already being closed (swallows ERR_SERVER_NOT_RUNNING internally) — and, since it
+    // waits for in-flight HTTP requests to finish, prisma.$disconnect() belongs after it so the
+    // DB pool stays alive until requests that might use it are done.
+    await io.close();
+    await app.close();
+    await prisma.$disconnect();
+    clearTimeout(forceExit);
+    process.exit(0);
+  } catch (error) {
+    app.log.error(error, 'error during shutdown');
+    process.exit(1);
+  }
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
