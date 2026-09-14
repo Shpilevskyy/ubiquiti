@@ -3,7 +3,7 @@ import path from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { Server as SocketIOServer } from 'socket.io';
-import type { HelloResponse } from '@ubiquiti-todo/shared';
+import { CLIENT_ID_HEADER, type HelloResponse } from '@ubiquiti-todo/shared';
 import { listsRoutes } from './routes/lists.js';
 import { todosRoutes } from './routes/todos.js';
 import { subtasksRoutes } from './routes/subtasks.js';
@@ -20,6 +20,13 @@ const app = Fastify({ logger: true });
 // handlers into each route's context at registration time, so routes added earlier would
 // otherwise keep the default handlers instead of ours.
 registerErrorHandling(app, { isProduction });
+
+// Reads the client-identity header once per request instead of every route handler repeating the
+// same `request.headers[CLIENT_ID_HEADER] as string | undefined` cast (tasks/09).
+app.decorateRequest('clientId', undefined);
+app.addHook('onRequest', async (request) => {
+  request.clientId = request.headers[CLIENT_ID_HEADER] as string | undefined;
+});
 
 // Attaches to app.server (the raw Node HTTP server), which exists before app.listen() — routes
 // registered below can broadcast realtime events via app.broadcaster.

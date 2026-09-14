@@ -1,7 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { Prisma } from '@prisma/client';
 import {
-  CLIENT_ID_HEADER,
   CreateSubTaskBodySchema,
   SOCKET_EVENTS,
   UpdateSubTaskBodySchema,
@@ -45,7 +43,7 @@ export async function subtasksRoutes(app: FastifyInstance) {
       const payload: SubTaskCreatedPayload = { todoId: request.params.todoId, subtask: serialized };
       app.broadcaster.broadcastToList(
         request.params.listId,
-        request.headers[CLIENT_ID_HEADER] as string | undefined,
+        request.clientId,
         SOCKET_EVENTS.SUBTASK_CREATED,
         payload,
       );
@@ -63,43 +61,32 @@ export async function subtasksRoutes(app: FastifyInstance) {
 
       const { base, ...updateData } = body.data;
 
-      try {
-        // See the identical comment in todos.ts's PATCH handler: one transaction scoped to the
-        // parent todoId fixes both the wrong-room broadcast (tasks/04 bug 1) and the TOCTOU
-        // conflict check (tasks/04 bug 2).
-        const result = await prisma.$transaction(async (tx) => {
-          const current = await tx.subTask.findFirst({
-            where: { id: request.params.subtaskId, todoId: request.params.todoId },
-          });
-          if (!current) return null;
-
-          const hadConflict = detectConflict(current, base);
-          const subtask = await tx.subTask.update({
-            where: { id: request.params.subtaskId },
-            data: { ...updateData, version: { increment: 1 } },
-          });
-          return { subtask, hadConflict };
+      // See the identical comment in todos.ts's PATCH handler: one transaction scoped to the
+      // parent todoId fixes both the wrong-room broadcast (tasks/04 bug 1) and the TOCTOU conflict
+      // check (tasks/04 bug 2); a concurrent delete landing inside the transaction throws P2025,
+      // mapped to 404 centrally in errorHandler.ts (tasks/09) rather than a try/catch here.
+      const result = await prisma.$transaction(async (tx) => {
+        const current = await tx.subTask.findFirst({
+          where: { id: request.params.subtaskId, todoId: request.params.todoId },
         });
+        if (!current) return null;
 
-        if (!result) {
-          return reply.code(404).send({ error: { code: 'not_found', message: 'SubTask not found' } });
-        }
+        const hadConflict = detectConflict(current, base);
+        const subtask = await tx.subTask.update({
+          where: { id: request.params.subtaskId },
+          data: { ...updateData, version: { increment: 1 } },
+        });
+        return { subtask, hadConflict };
+      });
 
-        const serialized = serializeSubTask(result.subtask);
-        const payload: SubTaskUpdatedPayload = { todoId: request.params.todoId, subtask: serialized };
-        app.broadcaster.broadcastToList(
-          request.params.listId,
-          request.headers[CLIENT_ID_HEADER] as string | undefined,
-          SOCKET_EVENTS.SUBTASK_UPDATED,
-          payload,
-        );
-        return { subtask: serialized, hadConflict: result.hadConflict };
-      } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-          return reply.code(404).send({ error: { code: 'not_found', message: 'SubTask not found' } });
-        }
-        throw err;
+      if (!result) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'SubTask not found' } });
       }
+
+      const serialized = serializeSubTask(result.subtask);
+      const payload: SubTaskUpdatedPayload = { todoId: request.params.todoId, subtask: serialized };
+      app.broadcaster.broadcastToList(request.params.listId, request.clientId, SOCKET_EVENTS.SUBTASK_UPDATED, payload);
+      return { subtask: serialized, hadConflict: result.hadConflict };
     },
   );
 
@@ -123,7 +110,7 @@ export async function subtasksRoutes(app: FastifyInstance) {
         };
         app.broadcaster.broadcastToList(
           request.params.listId,
-          request.headers[CLIENT_ID_HEADER] as string | undefined,
+          request.clientId,
           SOCKET_EVENTS.SUBTASK_DELETED,
           payload,
         );

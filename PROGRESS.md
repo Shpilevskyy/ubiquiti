@@ -577,6 +577,39 @@ reproducing the exact failure mode before and after.
       avatar both applying live, and offline add → reconnect → synced (confirmed via network log).
       Clean full build.
 
+- [x] `request.clientId` + central P2025/status-code handling (part of
+      [tasks/09-server-route-boilerplate.md](tasks/09-server-route-boilerplate.md) — items 1 and 3;
+      item 2, schema-driven validation via `fastify-type-provider-zod`, is its own follow-up given
+      it's the riskiest part of the task). Two of the three repeated patterns the 2026-09-12 review
+      found across the eight route handlers in `lists.ts`/`todos.ts`/`subtasks.ts`:
+      **`request.clientId`**: an `onRequest` hook in `index.ts` reads `X-Client-Id` once per
+      request and stores it via `app.decorateRequest`/a new `FastifyRequest.clientId` type
+      ([types/fastify.d.ts](apps/server/src/types/fastify.d.ts)) — replaces all 8 occurrences of
+      the identical `request.headers[CLIENT_ID_HEADER] as string | undefined` cast at every
+      broadcast call site.
+      **Central P2025 handling**: the three near-identical try/catch blocks (todo/subtask PATCH,
+      list PATCH) mapping Prisma's "record to update not found" to a 404 are gone; a thrown
+      `PrismaClientKnownRequestError` with code `P2025` now propagates to Fastify's
+      `setErrorHandler` ([errorHandler.ts](apps/server/src/errorHandler.ts)), which maps it to 404
+      before falling through to the generic status handling. The `if (!result) return 404` checks
+      in the todo/subtask transactions stay as-is — those are application-level "didn't exist at
+      read time" checks, not Prisma exceptions, and are a distinct case from the P2025 race (a
+      concurrent delete landing *inside* the transaction).
+      **Status→code mapping fixed**: the generic error handler previously mapped *every* non-5xx to
+      `code: 'bad_request'`, so e.g. a 413 would misreport as `bad_request` — now a small
+      `STATUS_TO_CODE` table maps 400/404/409/413/429 to their proper codes, falling back to
+      `bad_request` only for anything unlisted.
+      **Verified with curl** against the shared local dev server (already running under `tsx
+      watch`, so it picked up these route/handler changes automatically — no separate instance
+      needed): malformed JSON body now reports `invalid_body` instead of the old blanket
+      `bad_request`; unknown route still reports the unified `{ code: 'not_found', message: "Not
+      found" }` shape; deleting a list then PATCHing it exercises the actual Prisma P2025 path
+      (list PATCH has no explicit not-found check, unlike todo/subtask) and correctly 404s via the
+      new central handler; PATCHing a nonexistent todo still 404s via its existing application-level
+      check. Two-tab browser check confirmed `request.clientId` is wired correctly end-to-end: a
+      todo added in one tab broadcasts live to the other (plus its presence avatar), with no
+      self-echo errors in the originating tab's console. Clean full build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

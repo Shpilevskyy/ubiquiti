@@ -1,7 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { Prisma } from '@prisma/client';
 import {
-  CLIENT_ID_HEADER,
   CreateTodoBodySchema,
   SOCKET_EVENTS,
   UpdateTodoBodySchema,
@@ -45,7 +43,7 @@ export async function todosRoutes(app: FastifyInstance) {
     const serialized = serializeTodo(todo);
     app.broadcaster.broadcastToList(
       request.params.listId,
-      request.headers[CLIENT_ID_HEADER] as string | undefined,
+      request.clientId,
       SOCKET_EVENTS.TODO_CREATED,
       { todo: serialized },
     );
@@ -62,47 +60,38 @@ export async function todosRoutes(app: FastifyInstance) {
 
       const { base, ...updateData } = body.data;
 
-      try {
-        // Read + write in one transaction, both scoped to the parent listId: a mismatched listId
-        // must 404 rather than mutate the row and broadcast to the wrong room (tasks/04 bug 1),
-        // and wrapping both statements together means the conflict comparison and the write see
-        // the same snapshot — a plain findUnique-then-update let another write land in between
-        // and get compared against already-stale values (tasks/04 bug 2).
-        const result = await prisma.$transaction(async (tx) => {
-          const current = await tx.todo.findFirst({
-            where: { id: request.params.todoId, listId: request.params.listId },
-          });
-          if (!current) return null;
-
-          const hadConflict = detectConflict(current, base);
-          const todo = await tx.todo.update({
-            where: { id: request.params.todoId },
-            data: { ...updateData, version: { increment: 1 } },
-            include: { subtasks: { orderBy: { position: 'asc' } } },
-          });
-          return { todo, hadConflict };
+      // Read + write in one transaction, both scoped to the parent listId: a mismatched listId
+      // must 404 rather than mutate the row and broadcast to the wrong room (tasks/04 bug 1), and
+      // wrapping both statements together means the conflict comparison and the write see the
+      // same snapshot — a plain findUnique-then-update let another write land in between and get
+      // compared against already-stale values (tasks/04 bug 2). A concurrent delete landing
+      // between the findFirst and the update below (read-committed isolation doesn't serialize
+      // across a transaction's own statements) throws Prisma's P2025, mapped to 404 centrally in
+      // errorHandler.ts (tasks/09) rather than a try/catch here.
+      const result = await prisma.$transaction(async (tx) => {
+        const current = await tx.todo.findFirst({
+          where: { id: request.params.todoId, listId: request.params.listId },
         });
+        if (!current) return null;
 
-        if (!result) {
-          return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
-        }
+        const hadConflict = detectConflict(current, base);
+        const todo = await tx.todo.update({
+          where: { id: request.params.todoId },
+          data: { ...updateData, version: { increment: 1 } },
+          include: { subtasks: { orderBy: { position: 'asc' } } },
+        });
+        return { todo, hadConflict };
+      });
 
-        const serialized = serializeTodo(result.todo);
-        app.broadcaster.broadcastToList(
-          request.params.listId,
-          request.headers[CLIENT_ID_HEADER] as string | undefined,
-          SOCKET_EVENTS.TODO_UPDATED,
-          { todo: serialized },
-        );
-        return { todo: serialized, hadConflict: result.hadConflict };
-      } catch (err) {
-        // Still possible even inside the transaction: a concurrent delete landing between the
-        // findFirst and the update (read-committed isolation doesn't serialize across statements).
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-          return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
-        }
-        throw err;
+      if (!result) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'Todo not found' } });
       }
+
+      const serialized = serializeTodo(result.todo);
+      app.broadcaster.broadcastToList(request.params.listId, request.clientId, SOCKET_EVENTS.TODO_UPDATED, {
+        todo: serialized,
+      });
+      return { todo: serialized, hadConflict: result.hadConflict };
     },
   );
 
@@ -125,7 +114,7 @@ export async function todosRoutes(app: FastifyInstance) {
         const payload: TodoDeletedPayload = { todoId: request.params.todoId };
         app.broadcaster.broadcastToList(
           request.params.listId,
-          request.headers[CLIENT_ID_HEADER] as string | undefined,
+          request.clientId,
           SOCKET_EVENTS.TODO_DELETED,
           payload,
         );
