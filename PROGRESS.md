@@ -1017,6 +1017,81 @@ reproducing the exact failure mode before and after.
       reasoning and the accepted cost (bundle size, worse behavior through some corporate proxies)
       now in [specs/01-architecture.md](specs/01-architecture.md#realtime-transport-why-not-server-sent-events).
 
+- [x] String fractional indexing, replacing `position: Float` —
+      [tasks/18-fractional-string-indexing.md](tasks/18-fractional-string-indexing.md). Repeated
+      insertions into the same gap halve a float's remaining space each time; the spec's own
+      epsilon/re-index fallback for that was never actually implemented (a known, documented gap
+      since drag-and-drop shipped). `fractional-indexing`'s lexicographic string keys remove the
+      problem instead of handling it — see
+      [specs/08-drag-and-drop.md](specs/08-drag-and-drop.md#position-strategy-fractional-index-string-keys)
+      for the full design (collation included).
+      **Schema + migration, in two steps with a required backfill in between** (Prisma migrations
+      are pure SQL; `generateNKeysBetween` is a JS algorithm with no reasonable SQL port):
+      1. `20260914140000_add_position_key_columns` — additive, backward-compatible: nullable
+         `positionKey TEXT COLLATE "C"` columns alongside the untouched float `position` columns.
+      2. `apps/server/scripts/backfillPositionKeys.ts` (`npm run db:backfill-positions -w
+         @ubiquiti-todo/server`) — for each list/todo, reads existing rows ordered by the old float
+         `position`, assigns `generateNKeysBetween(null, null, count)` in that order via raw SQL
+         (`$queryRaw`/`$executeRaw`, deliberately not the typed Prisma Client — schema.prisma
+         already declares the final `position String` shape, so the generated client doesn't know
+         about either transitional column). Idempotent: always recomputes from the still-intact
+         float order, safe to re-run.
+      3. `20260914140100_finalize_position_as_string` — drops the old float `position`, renames
+         `positionKey` into its place, sets `NOT NULL`, recreates the composite
+         `(listId, position)`/`(todoId, position)` indexes from tasks/15 (dropping the float column
+         drops any index defined on it, so these would otherwise silently disappear).
+      **Deployment hazard caught before it mattered**: this app auto-deploys via `prisma migrate
+      deploy` on every push (see Environment above) with nothing to stop both migrations applying
+      back-to-back, unattended, in one deploy — if the backfill script hasn't been run against that
+      database yet, migration 2 would rename an all-NULL column into place and permanently lose
+      every row's ordering. Fixed by making migration 2 itself abort (`RAISE EXCEPTION` in a `DO`
+      block, checking for any `positionKey IS NULL`) rather than relying on a comment someone has
+      to remember to read — a failed deploy is the safe failure mode, not a silent data-destroying
+      one. **Verified the guard directly**, not just reasoned about: built the exact hazard
+      scenario in a throwaway database (init + index migrations, then only the additive migration,
+      then a manually-seeded row with a null `positionKey`), confirmed migration 2 aborts with a
+      clear, actionable error naming the exact row counts and the script to run; then ran the
+      backfill against that same throwaway database and confirmed migration 2 then applies cleanly.
+      **Collation**: `COLLATE "C"` set on both columns via raw SQL (Prisma has no schema-level
+      attribute for this). **Could not reproduce the described divergence locally** — this repo's
+      `docker-compose` Postgres (`postgres:17-alpine`, musl libc) reports `en_US.utf8` as its
+      collation but several deliberately-constructed mixed-case test pairs (`'Ab'` vs `'aA'`,
+      `'aa'` vs `'AB'`, and others) sorted identically under it and under explicit `COLLATE "C"` —
+      Alpine's musl-based locale support appears to fall back to byte order rather than
+      implementing glibc's multi-level (case-as-secondary-weight) collation. Flagging this
+      honestly rather than claiming to have reproduced a bug I couldn't actually trigger here:
+      the fix is still correct and worth keeping regardless (explicit byte-order collation is
+      always the right choice for this use case, whatever a given Postgres build's default happens
+      to do), and Render's Postgres — almost certainly a standard glibc-based image, not Alpine —
+      is exactly where the task's warning is more likely to bite.
+      **Client** ([lib/position.ts](apps/web/src/lib/position.ts)): `computeReorderPosition`
+      delegates directly to `generateKeyBetween`; new `comparePosition` helper (plain `<`/`>`,
+      deliberately not `localeCompare`, which would reintroduce the same collation problem
+      client-side) used by both `reorderTodo`/`reorderSubTask`'s optimistic re-sort. `createTodo`/
+      `createSubTask`'s `Date.now()` placeholder positions
+      ([useList.ts](apps/web/src/hooks/useList.ts)) now read the current last sibling from the
+      query cache and call `generateKeyBetween(lastSibling?.position ?? null, null)`. Shared zod
+      schemas (`TodoSchema`, `SubTaskSchema`, `TodoMutableSchema`, `SubTaskMutableSchema`,
+      `CreateTodoBodySchema`, `CreateSubTaskBodySchema`) changed `position: z.number()` →
+      `z.string().min(1)`.
+      **Verified end-to-end** against a running server: order-preservation confirmed for every
+      existing Todo and SubTask via a `row_number()` comparison (old float rank vs new key rank) —
+      all matched exactly across all lists. 150 repeated same-gap insertions via the library
+      directly, then 30 more via real PATCH requests against the running server, produced zero
+      collisions (keys just grew, e.g. reaching 3 characters after 150 insertions). Fresh creates,
+      reorders, and subtask reorders all round-tripped correctly through the real API. Offline
+      reorder replay verified by writing a `QueuedOp` with a string `position` directly into the
+      outbox's IndexedDB store and confirming `outboxSync`'s flush-on-mount sent and applied it
+      correctly (and dequeued it) on the next page load — the outbox/flush code has no
+      position-specific logic (bodies are opaque JSON), so this was never a high-risk path, but was
+      still checked directly rather than assumed. Full monorepo build/typecheck/lint clean.
+      **Couldn't verify a real pointer-drag gesture** in this session's browser automation — a
+      simulated drag was interpreted as plain text selection rather than triggering `dnd-kit`'s
+      `PointerSensor`, a known limitation of this tool for pointer-based drag interactions, not a
+      regression (the DnD wiring itself is unchanged by this task; only the position *value*
+      computation changed, already verified through the same `reorderTodo`/`reorderSubTask`
+      mutation code paths via direct API calls).
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

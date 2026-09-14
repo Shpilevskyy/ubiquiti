@@ -2,12 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { produce } from 'immer';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { generateKeyBetween } from 'fractional-indexing';
 import type { GetListResponse, SubTask, Todo } from '@ubiquiti-todo/shared';
 import { useNotice } from './useNotice';
 import { api, HttpError, sendOp } from '../lib/api';
 import { connectionStatus } from '../lib/connectionStatus';
 import { dequeue, enqueue, type QueuedOp } from '../lib/outbox';
 import { start as startOutboxSync } from '../lib/outboxSync';
+import { comparePosition } from '../lib/position';
 
 const DISCARDED_MESSAGE = 'A change could not be saved and was discarded';
 const CONFLICT_MESSAGE = 'This item was also edited elsewhere';
@@ -157,9 +159,10 @@ export function useList(listId: string | undefined) {
     ...OFFLINE_AWARE,
     mutationFn: (title: string) => {
       const id = crypto.randomUUID();
-      // Date.now() is a placeholder ordering key; proper position allocation for drag-and-drop
-      // reordering is specs/08-drag-and-drop.md's concern, not this task's.
-      const position = Date.now();
+      // Array is always kept in position order (server returns it sorted, reorderTodo's
+      // optimistic update re-sorts) — so the last element is the last sibling to insert after.
+      const todos = queryClient.getQueryData<GetListResponse>(queryKey)?.todos ?? [];
+      const position = generateKeyBetween(todos.at(-1)?.position ?? null, null);
       const optimisticTodo: Todo = {
         id,
         listId: listId!,
@@ -299,7 +302,7 @@ export function useList(listId: string | undefined) {
   // visually jumps the item elsewhere.
   const reorderTodo = useMutation({
     ...OFFLINE_AWARE,
-    mutationFn: ({ todoId, position }: { todoId: string; position: number }) =>
+    mutationFn: ({ todoId, position }: { todoId: string; position: string }) =>
       mutateWithOutbox<{ todo: Todo; hadConflict: boolean }>(
         { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}`, body: { position } },
         (old) =>
@@ -308,7 +311,7 @@ export function useList(listId: string | undefined) {
             const todo = draft.todos.find((t) => t.id === todoId);
             if (!todo) return;
             todo.position = position;
-            draft.todos.sort((a, b) => a.position - b.position);
+            draft.todos.sort(comparePosition);
           }),
         // The response's position is the exact value just sent (server doesn't recompute it), so
         // the order the optimistic sort above already settled on stays correct — no need to
@@ -321,8 +324,10 @@ export function useList(listId: string | undefined) {
     ...OFFLINE_AWARE,
     mutationFn: ({ todoId, title }: { todoId: string; title: string }) => {
       const id = crypto.randomUUID();
-      // Same Date.now() placeholder ordering key as createTodo — see the comment there.
-      const position = Date.now();
+      // Same "last sibling in the already-sorted array" reasoning as createTodo above.
+      const subtasks = queryClient.getQueryData<GetListResponse>(queryKey)?.todos.find((t) => t.id === todoId)
+        ?.subtasks;
+      const position = generateKeyBetween(subtasks?.at(-1)?.position ?? null, null);
       const optimisticSubTask: SubTask = {
         id,
         todoId,
@@ -412,7 +417,7 @@ export function useList(listId: string | undefined) {
   // See reorderTodo above — same idea, one level down.
   const reorderSubTask = useMutation({
     ...OFFLINE_AWARE,
-    mutationFn: ({ todoId, subtaskId, position }: { todoId: string; subtaskId: string; position: number }) =>
+    mutationFn: ({ todoId, subtaskId, position }: { todoId: string; subtaskId: string; position: string }) =>
       mutateWithOutbox<{ subtask: SubTask; hadConflict: boolean }>(
         { method: 'PATCH', path: `/lists/${listId}/todos/${todoId}/subtasks/${subtaskId}`, body: { position } },
         (old) =>
@@ -422,7 +427,7 @@ export function useList(listId: string | undefined) {
             const subtask = todo?.subtasks.find((s) => s.id === subtaskId);
             if (!todo || !subtask) return;
             subtask.position = position;
-            todo.subtasks.sort((a, b) => a.position - b.position);
+            todo.subtasks.sort(comparePosition);
           }),
         (old, response) => replaceSubTask(old, response.subtask),
       ),

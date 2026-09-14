@@ -1,6 +1,11 @@
 # 18 — Replace `position: Float` with string fractional indexing
 
-**Status:** not started
+**Status:** done, see PROGRESS.md. **Deployment note**: this shipped as two migrations with a
+required data backfill in between (`npm run db:backfill-positions -w @ubiquiti-todo/server`) — the
+second migration hard-aborts if it detects any un-backfilled row, so an unattended `prisma migrate
+deploy` (e.g. Render's auto-deploy) fails safely rather than destroying data if the backfill hasn't
+been run against that database yet. Run the backfill against Render's database before/as part of
+deploying this.
 **Size:** M (schema migration + data backfill + client helper swap)
 **Depends on:** [17](17-record-reordering-decision.md) (record the client-vs-server decision first;
 this task changes the key type, not who computes it)
@@ -83,8 +88,11 @@ persistence for us.
 
 ## Done when
 
-- [ ] `position` is a `C`-collated string column on both models
-- [ ] Existing data backfilled with order preserved
-- [ ] `computeReorderPosition` delegates to `generateKeyBetween`; precision caveat deleted
-- [ ] Repeated same-gap insertion never collides
-- [ ] Offline reorder replay still works
+- [x] `position` is a `C`-collated string column on both models
+- [x] Existing data backfilled with order preserved — verified via `row_number()` comparison
+      (old float order vs new key order) for every Todo and SubTask; all matched exactly.
+- [x] `computeReorderPosition` delegates to `generateKeyBetween`; precision caveat deleted
+- [x] Repeated same-gap insertion never collides — 150 iterations via the library directly, 30 via
+      real PATCH requests against a running server, no collisions either way.
+- [x] Offline reorder replay still works — verified by writing a `QueuedOp` directly into the
+      outbox's IndexedDB store and confirming it flushed and applied correctly on the next mount.

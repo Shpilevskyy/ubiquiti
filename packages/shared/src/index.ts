@@ -27,7 +27,9 @@ export const SubTaskSchema = z.object({
   todoId: z.uuid(),
   title: z.string(),
   done: z.boolean(),
-  position: z.number(),
+  // Fractional-index key (tasks/18), not a numeric position — lexicographically ordered, byte
+  // comparison only (the DB column is COLLATE "C"; see specs/08-drag-and-drop.md).
+  position: z.string().min(1),
   costCents: z.number().int().nullable(),
   version: z.number().int(),
   createdAt: z.string(),
@@ -40,7 +42,8 @@ export const TodoSchema = z.object({
   listId: z.uuid(),
   title: z.string(),
   done: z.boolean(),
-  position: z.number(),
+  // See SubTaskSchema.position — fractional-index key, not a number.
+  position: z.string().min(1),
   costCents: z.number().int().nullable(),
   descriptionMd: z.string().nullable(),
   version: z.number().int(),
@@ -63,7 +66,7 @@ export type UpdateListBody = z.infer<typeof UpdateListBodySchema>;
 export const CreateTodoBodySchema = z.object({
   id: z.uuid(),
   title: z.string().min(1),
-  position: z.number(),
+  position: z.string().min(1),
   costCents: z.number().int().nullable().optional(),
   descriptionMd: z.string().nullable().optional(),
 });
@@ -74,7 +77,7 @@ export type CreateTodoBody = z.infer<typeof CreateTodoBodySchema>;
 const TodoMutableSchema = z.object({
   title: z.string().min(1),
   done: z.boolean(),
-  position: z.number(),
+  position: z.string().min(1),
   costCents: z.number().int().nullable(),
   descriptionMd: z.string().nullable(),
 });
@@ -98,7 +101,7 @@ export type UpdateTodoBody = z.infer<typeof UpdateTodoBodySchema>;
 export const CreateSubTaskBodySchema = z.object({
   id: z.uuid(),
   title: z.string().min(1),
-  position: z.number(),
+  position: z.string().min(1),
   costCents: z.number().int().nullable().optional(),
 });
 export type CreateSubTaskBody = z.infer<typeof CreateSubTaskBodySchema>;
@@ -106,7 +109,7 @@ export type CreateSubTaskBody = z.infer<typeof CreateSubTaskBodySchema>;
 const SubTaskMutableSchema = z.object({
   title: z.string().min(1),
   done: z.boolean(),
-  position: z.number(),
+  position: z.string().min(1),
   costCents: z.number().int().nullable(),
 });
 export type SubTaskMutableFields = z.infer<typeof SubTaskMutableSchema>;

@@ -21,7 +21,12 @@ model Todo {
   list          List      @relation(fields: [listId], references: [id], onDelete: Cascade)
   title         String
   done          Boolean   @default(false)
-  position      Float
+  // Fractional-index key (tasks/18), not a numeric position — see specs/08-drag-and-drop.md.
+  // Prisma has no schema-level collation attribute; the migration sets this column
+  // `COLLATE "C"` (byte order) directly in raw SQL, since Postgres's default locale collation
+  // would sort these base-62 keys wrong (case/punctuation as secondary weights). Not visible
+  // here — don't let a future schema change silently drop it.
+  position      String
   costCents     Int?
   descriptionMd String?
   version       Int       @default(0)
@@ -42,7 +47,8 @@ model SubTask {
   todo      Todo     @relation(fields: [todoId], references: [id], onDelete: Cascade)
   title     String
   done      Boolean  @default(false)
-  position  Float
+  // See Todo.position above — same fractional-index key, same COLLATE "C" requirement.
+  position  String
   costCents Int?
   version   Int      @default(0)
   createdAt DateTime @default(now())

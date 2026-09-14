@@ -7,21 +7,33 @@ keyboard accessibility) — it has no concept of our `position` field or persist
 new position and saving it is ours to write, which is the point of using a headless library here
 rather than something like `react-beautiful-dnd`'s higher-level list-reordering helpers.
 
-## Position strategy: fractional keys
+## Position strategy: fractional-index string keys
 
-Each Todo/SubTask has a float `position`. Siblings are ordered by `position` ascending. To move
-an item between two neighbors:
+Each Todo/SubTask has a `position: string` — a fractional-index key
+([`fractional-indexing`](https://www.npmjs.com/package/fractional-indexing), tasks/18) rather than
+a float. Siblings are ordered by `position` ascending, using a database column that's `COLLATE "C"`
+(byte order — see Collation below). To move an item between two neighbors:
 
 ```
-newPosition = (prevSibling.position + nextSibling.position) / 2
+newPosition = generateKeyBetween(prevSibling?.position ?? null, nextSibling?.position ?? null)
 ```
 
-- Moving to the start: `newPosition = firstSibling.position - 1`
-- Moving to the end: `newPosition = lastSibling.position + 1`
-- Empty list: first item gets `position = 0`
+`generateKeyBetween` produces a lexicographically-ordered base-62 string that sorts strictly
+between its two bounds (either may be `null` for "insert at the start/end"; an empty list's first
+item gets `generateKeyBetween(null, null)`). This means a reorder only ever touches **one row**
+(the moved item), regardless of list length — no need for a batch-reorder endpoint or rewriting
+every sibling's position — same property floats had, without floats' precision ceiling (see
+Known limitation, below, for why floats were replaced).
 
-This means a reorder only ever touches **one row** (the moved item), regardless of list length —
-no need for a batch-reorder endpoint or rewriting every sibling's position.
+### Collation
+
+Postgres's default locale collation (`en_US.UTF-8` on both the docker-compose image and Render)
+does *not* sort ASCII-betically — it applies locale rules that treat case and punctuation as
+secondary weights. Base-62 keys mix digits, uppercase and lowercase, so `ORDER BY position` under
+a locale collation can disagree with the ordering the key generator intends. The `position` column
+is `COLLATE "C"` (byte order) on both models — set via raw SQL in the migration, since Prisma has
+no schema-level collation attribute. Client-side comparisons use plain `<`/`>`
+(`lib/position.ts#comparePosition`), not `localeCompare`, for the same reason.
 
 ## Decision: client computes the position, not just the drag
 
@@ -45,18 +57,25 @@ exist — by the time it lands, so the item can end up somewhere neither user in
 exactly the scenario this app gets shown in — but the offline requirement makes value-based the
 better trade regardless, not the lazy one.
 
-[tasks/18](../tasks/18-fractional-string-indexing.md) changes the position *key type* (float →
-fractional string) to fix a different problem (precision collisions, below) — it doesn't revisit
-this client-vs-server decision.
+[tasks/18](../tasks/18-fractional-string-indexing.md) changed the position *key type* (float →
+fractional string, done — see below) to fix a different problem (precision collisions) — it didn't
+revisit this client-vs-server decision.
 
-## Known limitation: float precision
+## Former limitation: float precision (fixed by tasks/18)
 
-Repeated insertions into the same gap halve the remaining space each time; after enough
-insertions in one spot, floats could theoretically lose precision. Mitigation kept intentionally
-simple for this project's scope: if the computed gap between neighbors is smaller than a small
-epsilon (e.g. `1e-7`), fall back to **re-indexing the whole sibling list** (assign `0, 1, 2, ...`)
-in that one request before computing the new item's position. This is a rare-path safeguard, not
-the common case.
+`position` was originally a `Float`, averaging two neighbors to insert between them. Repeated
+insertions into the same gap halve the remaining space each time; after enough insertions in one
+spot, the average stops being representable and two items collide on an identical position, at
+which point their relative order is whatever Postgres feels like. The spec originally called for
+an epsilon-triggered re-index fallback (detect a too-small gap, renumber the whole sibling list in
+that request) — that fallback was never actually implemented, and building it correctly meant
+detecting the collision, renumbering every sibling, persisting N rows in one transaction, and
+broadcasting the whole reorder to other clients, all interacting correctly with the offline outbox.
+
+String fractional indexing (above) removes the problem instead of handling it: lexicographically
+ordered keys never run out of room — between `"a"` and `"b"` you can always insert `"am"`, and
+between `"a"` and `"am"` you can insert `"ah"`, forever. Keys grow a character at a time rather
+than losing precision. No fallback to build, none needed.
 
 ## Interaction flow
 
