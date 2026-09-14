@@ -1,6 +1,6 @@
 # 04 — Scope todo/subtask routes to their parent id; fix TOCTOU conflict check
 
-**Status:** not started
+**Status:** done — see PROGRESS.md Completed
 **Size:** M
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -97,7 +97,7 @@ seven cases it covers. Re-run it after this change.
 
 ## Done when
 
-- [ ] Mismatched parent id 404s on PATCH and DELETE, for both todos and subtasks
-- [ ] DELETE only broadcasts when a row was actually deleted
-- [ ] Version check and write are a single atomic statement
-- [ ] All four conflict cases still behave as specced, LWW intact
+- [x] Mismatched parent id 404s on PATCH and DELETE, for both todos and subtasks
+- [x] DELETE only broadcasts when a row was actually deleted
+- [x] Version check and write are a single atomic statement
+- [x] All four conflict cases still behave as specced, LWW intact

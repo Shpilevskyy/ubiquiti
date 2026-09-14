@@ -25,6 +25,12 @@ ledger:
 This matters most for [06-offline-sync.md](06-offline-sync.md), where the outbox may replay an
 operation more than once if a response was lost mid-flight.
 
+Every Todo/SubTask path also carries its parent id (`:listId`/`:todoId`), and every PATCH/DELETE
+validates the child against it before touching anything — a real id under the *wrong* parent 404s
+rather than mutating/deleting the row and broadcasting to whichever list the URL happened to name.
+This is a distinct case from the idempotent-delete rule above: an id that doesn't exist under any
+parent is still a 204 no-op retry; only a genuine parent mismatch 404s.
+
 ## Endpoints
 
 All under `/api`.

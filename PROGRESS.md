@@ -412,6 +412,34 @@ reproducing the exact failure mode before and after.
       with one op queued and confirmed (via the network log) exactly one PATCH was sent, not five.
       Clean full build.
 
+- [x] Route scoping + conflict-check TOCTOU —
+      [tasks/04-route-scoping-and-conflict-check.md](tasks/04-route-scoping-and-conflict-check.md):
+      two defects in the same four handlers (todo/subtask PATCH/DELETE), fixed together since both
+      touch the same `where` clauses.
+      **Parent scoping**: PATCH resolved the row by its own id alone and broadcast to whatever
+      `listId`/`todoId` the URL claimed — a mismatched parent silently mutated the row and notified
+      the wrong room. PATCH now runs the read and the write inside `prisma.$transaction`, with the
+      read (`findFirst`) scoped to `{ id, listId }` (todos) / `{ id, todoId }` (subtasks); a
+      mismatch 404s before anything is touched. DELETE now scopes its `deleteMany` the same way and
+      only broadcasts when `count > 0` (matching the pattern `lists.ts` already used) — but a plain
+      scoped `deleteMany` can't distinguish "wrong parent" from "already gone" (both are `count: 0`),
+      and specs/03 documents delete as idempotent (already-gone → `204`, not `404`). So DELETE first
+      does an unscoped `findUnique`: exists under a different parent → `404`; doesn't exist at all →
+      falls through to the idempotent `204`. specs/03 updated with this distinction.
+      **TOCTOU**: the conflict check was a `findUnique` then a separate `update` with no transaction
+      between them — a write landing in the gap got compared against already-stale values, so
+      `hadConflict` could read `false` for a write that did clobber something. Folded into the same
+      `$transaction` as the parent-scoping fix above (both `tx.todo.findFirst`/`tx.todo.update`, not
+      the outer `prisma` client), so the comparison and the write now see one snapshot. The `P2025`
+      catch stays — read-committed isolation doesn't serialize across the transaction's two
+      statements, so a concurrent delete landing between them is still possible and still 404s.
+      **Verified with curl against a local server** (no browser needed, per the task): PATCH/DELETE
+      through the wrong parent 404 and leave the row untouched, for both todos and subtasks;
+      correct-parent PATCH/DELETE still work; deleting an already-gone todo is still a `204`
+      (idempotency preserved); re-ran `scripts/verify-conflict.py` — all 10 pre-existing conflict
+      cases (including the false-positive-on-different-field case fixed 2026-09-14) still pass.
+      Clean full build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
