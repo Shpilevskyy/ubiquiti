@@ -24,21 +24,23 @@ export function SubtaskItem({ subtask }: SubtaskItemProps) {
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
-        className="cursor-grab touch-none text-xs text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        className="cursor-grab touch-none text-xs text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 active:cursor-grabbing"
       >
-        ⠿
+        <span aria-hidden="true">⠿</span>
       </button>
-      <input
-        type="checkbox"
-        checked={subtask.done}
-        onChange={() =>
-          toggleSubTask.mutate({ todoId: subtask.todoId, subtaskId: subtask.id, done: !subtask.done })
-        }
-        className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
-      />
-      <span className={`flex-1 text-sm text-slate-600 ${subtask.done ? 'text-slate-400 line-through' : ''}`}>
-        {subtask.title}
-      </span>
+      <label className="flex flex-1 items-center gap-3">
+        <input
+          type="checkbox"
+          checked={subtask.done}
+          onChange={() =>
+            toggleSubTask.mutate({ todoId: subtask.todoId, subtaskId: subtask.id, done: !subtask.done })
+          }
+          className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
+        />
+        <span className={`flex-1 text-sm text-slate-600 ${subtask.done ? 'text-slate-400 line-through' : ''}`}>
+          {subtask.title}
+        </span>
+      </label>
       <CostInput
         costCents={subtask.costCents}
         onSave={(costCents) =>
@@ -53,7 +55,7 @@ export function SubtaskItem({ subtask }: SubtaskItemProps) {
       <button
         type="button"
         onClick={() => deleteSubTask.mutate({ todoId: subtask.todoId, subtaskId: subtask.id })}
-        className="text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+        className="rounded text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
       >
         Delete
       </button>

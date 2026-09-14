@@ -79,7 +79,7 @@ export function LandingPage() {
                     type="button"
                     onClick={() => handleDeleteList(list.id, list.title)}
                     disabled={deleteList.isPending}
-                    className="shrink-0 px-1 text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="shrink-0 rounded px-1 text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Delete
                   </button>

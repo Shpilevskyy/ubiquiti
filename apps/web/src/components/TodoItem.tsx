@@ -49,19 +49,21 @@ export function TodoItem({ todo }: TodoItemProps) {
           {...attributes}
           {...listeners}
           aria-label="Drag to reorder"
-          className="cursor-grab touch-none text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+          className="cursor-grab touch-none text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 active:cursor-grabbing"
         >
-          ⠿
+          <span aria-hidden="true">⠿</span>
         </button>
-        <input
-          type="checkbox"
-          checked={todo.done}
-          onChange={() => toggleTodo.mutate({ todoId: todo.id, done: !todo.done })}
-          className="h-4 w-4 shrink-0 accent-indigo-600"
-        />
-        <span className={`flex-1 text-sm text-slate-900 ${todo.done ? 'text-slate-400 line-through' : ''}`}>
-          {todo.title}
-        </span>
+        <label className="flex flex-1 items-center gap-3">
+          <input
+            type="checkbox"
+            checked={todo.done}
+            onChange={() => toggleTodo.mutate({ todoId: todo.id, done: !todo.done })}
+            className="h-4 w-4 shrink-0 accent-indigo-600"
+          />
+          <span className={`flex-1 text-sm text-slate-900 ${todo.done ? 'text-slate-400 line-through' : ''}`}>
+            {todo.title}
+          </span>
+        </label>
         <SubtaskProgress
           done={todo.subtasks.filter((subtask) => subtask.done).length}
           total={todo.subtasks.length}
@@ -75,7 +77,7 @@ export function TodoItem({ todo }: TodoItemProps) {
         <button
           type="button"
           onClick={() => deleteTodo.mutate(todo.id)}
-          className="text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+          className="rounded text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
         >
           Delete
         </button>

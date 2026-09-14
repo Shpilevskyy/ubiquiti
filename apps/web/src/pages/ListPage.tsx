@@ -78,7 +78,10 @@ function ListPageContent({ listId }: { listId: string }) {
 
           <div className="flex items-center gap-3">
             {connectionStatus === 'offline' && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+              <span
+                role="status"
+                className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+              >
                 Offline
               </span>
             )}
@@ -87,7 +90,9 @@ function ListPageContent({ listId }: { listId: string }) {
                 {others.map((member) => (
                   <span
                     key={member.id}
+                    role="img"
                     title={`${member.name} is viewing`}
+                    aria-label={`${member.name} is viewing`}
                     className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium text-white ring-2 ring-white"
                     style={{ backgroundColor: member.color }}
                   >
@@ -127,8 +132,12 @@ function ListPageContent({ listId }: { listId: string }) {
       </div>
 
       {conflictNotice && (
-        // Keyboard-dismissibility for this toast is tasks/16-accessibility.md's scope.
-        // biome-ignore lint/a11y/useKeyWithClickEvents: tracked in tasks/16-accessibility.md
+        // `role="status"` is a live-region role — ARIA treats it as non-interactive, so it can't
+        // also take tabIndex/keyboard focus (tasks/16-accessibility.md's own "quick wins" note:
+        // the role is already correct, leave it). Click-to-dismiss stays as a mouse convenience;
+        // it isn't a reachability gap, since this toast auto-dismisses on its own after 4s either
+        // way — nothing is only reachable through it.
+        // biome-ignore lint/a11y/useKeyWithClickEvents: see comment above.
         <div
           role="status"
           onClick={dismissConflictNotice}

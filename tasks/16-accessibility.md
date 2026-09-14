@@ -1,6 +1,6 @@
 # 16 — Keyboard reachability and accessible names
 
-**Status:** not started
+**Status:** done
 **Size:** S
 **Depends on:** —
 **Source:** Staff review 2026-09-12
@@ -70,8 +70,8 @@ layout (buttons have their own default styles and can't legally contain block co
 
 ## Done when
 
-- [ ] No focusable control is invisible when focused
-- [ ] Checkboxes announce their item title
-- [ ] Description editing reachable and operable by keyboard
-- [ ] Keyboard drag-reorder works end to end
-- [ ] Connectivity and presence conveyed by more than colour/`title`
+- [x] No focusable control is invisible when focused
+- [x] Checkboxes announce their item title
+- [x] Description editing reachable and operable by keyboard
+- [x] Keyboard drag-reorder works end to end
+- [x] Connectivity and presence conveyed by more than colour/`title`

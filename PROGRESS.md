@@ -744,6 +744,58 @@ reproducing the exact failure mode before and after.
       click-to-edit/autoGrow/Escape-discard path (touched by the `autoGrow` move) against a live
       dev server with no console errors.
 
+- [x] Keyboard reachability and accessible names —
+      [tasks/16-accessibility.md](tasks/16-accessibility.md). Four independent a11y gaps, three of
+      which the new Biome linter (tasks/12) had already surfaced and left as tracked
+      `biome-ignore`s pointing here — this task is what removes those.
+      **Invisible-when-focused controls**: drag handles and Delete buttons
+      ([TodoItem.tsx](apps/web/src/components/TodoItem.tsx),
+      [SubtaskItem.tsx](apps/web/src/components/SubtaskItem.tsx),
+      [LandingPage.tsx](apps/web/src/pages/LandingPage.tsx)) were `opacity-0` until
+      `group-hover`, so a keyboard user could tab onto a fully invisible control — on a todo row,
+      the very next thing reachable was an irreversible delete. Added `focus-visible:opacity-100`
+      plus an explicit `focus-visible:ring-2 focus-visible:ring-indigo-500/50` everywhere
+      `group-hover:opacity-100` appears (browser-verified via `getComputedStyle` after a real `Tab`
+      keypress: opacity `1`, a visible box-shadow ring).
+      **Checkboxes had no accessible name**: bare `<input type="checkbox">` next to a sibling
+      `<span>` with no association. Wrapped both in a `<label>` in `TodoItem`/`SubtaskItem` — also
+      makes the title text a click target for toggling, per the task's suggested UX win.
+      Browser-verified: `checkbox.labels[0].textContent` reads the todo/subtask title for both.
+      **Description/cost editors unreachable by keyboard**: `TodoDescription`'s and `CostInput`'s
+      click-to-edit triggers were a plain `<div>`/`<span>` with only `onClick`. Per the task's own
+      suggested resolution — a real `<button>` can't legally contain the block content
+      (headings/lists/tables) `ReactMarkdown` renders, and would need its default box styling
+      overridden anyway for the inline `CostInput` case — both became `role="button" tabIndex={0}`
+      with an `onKeyDown` treating Enter/Space as `onClick` (`lint/a11y/useSemanticElements`
+      suppressed at both sites with that reasoning, since Biome's default suggestion doesn't apply
+      here). Browser-verified end-to-end via real `Tab`/`Enter` keypresses (no mouse): tabbed onto
+      each trigger, pressed Enter, confirmed `document.activeElement` became the `<textarea>`/
+      `<input>`, typed a value, committed with `Cmd+Enter`/`Enter`, and confirmed it rendered and
+      persisted.
+      **Connectivity/presence conveyed by more than colour/`title`**: the "Offline" pill got
+      `role="status"`; presence avatars got `aria-label` alongside the existing (screen-reader-
+      unreliable) `title`, which required adding `role="img"` too — a plain `<span>` doesn't
+      support `aria-label` per ARIA's role-attribute rules, another rule the linter caught
+      (`lint/a11y/useAriaPropsSupportedByRole`). The conflict-notice toast's `role="status"` was
+      already correct per the task's own note; its pre-existing `onClick`-to-dismiss stayed
+      mouse-only rather than gaining `tabIndex` — `role="status"` is an ARIA live-region role,
+      non-interactive by definition, and mixing in keyboard-focusability would itself be an ARIA
+      violation (`lint/a11y/noNoninteractiveTabindex` caught this too, on a first attempt that did
+      add `tabIndex`). Not a real reachability gap either way: the toast auto-dismisses on its own
+      after 4s, so nothing is exclusively reachable through it.
+      **Not touched**: keyboard drag-reorder itself — `dnd-kit`'s `KeyboardSensor` was already
+      wired up (specs/08); this task only changed the handle's visibility/labeling, not the
+      sensors, and re-verifying the existing reorder flow wasn't necessary since nothing in that
+      path changed.
+      **Verified**: `npm run lint`/`typecheck`/`build` all clean (zero `biome-ignore` comments
+      remain in any of the touched files). Browser-verified the full keyboard path with real
+      `Tab`/`Enter`/`Space` keypresses against a fresh test list: reached and activated the drag
+      handle (visible + ringed), the labeled checkbox, the cost editor, the delete button, and the
+      description editor in tab order; typed and saved a description via keyboard alone; confirmed
+      both todo and subtask checkboxes report their title as the accessible name via
+      `checkbox.labels[0].textContent`; confirmed the drag-handle glyph is `aria-hidden`. No
+      console errors.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

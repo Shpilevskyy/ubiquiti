@@ -73,13 +73,21 @@ export function TodoDescription({ descriptionMd, onSave }: TodoDescriptionProps)
   }
 
   return (
-    // Keyboard reachability for this click-to-edit trigger is tasks/16-accessibility.md's scope
-    // (item 3: "The description editor is unreachable by keyboard").
-    // biome-ignore lint/a11y/useKeyWithClickEvents: tracked in tasks/16-accessibility.md
-    // biome-ignore lint/a11y/noStaticElementInteractions: tracked in tasks/16-accessibility.md
+    // A <div role="button"> rather than a real <button>, per tasks/16-accessibility.md: the
+    // rendered markdown can contain block content (headings, lists, tables), which a <button>
+    // can't legally contain.
+    // biome-ignore lint/a11y/useSemanticElements: see comment above.
     <div
+      role="button"
+      tabIndex={0}
       onClick={startEditing}
-      className="prose prose-sm prose-slate mt-1 max-w-none cursor-text rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold prose-h1:text-sm prose-h2:text-sm prose-p:my-1 prose-blockquote:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-1 prose-hr:my-2"
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          startEditing();
+        }
+      }}
+      className="prose prose-sm prose-slate mt-1 max-w-none cursor-text rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 prose-headings:my-1 prose-headings:text-xs prose-headings:font-semibold prose-h1:text-sm prose-h2:text-sm prose-p:my-1 prose-blockquote:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-1 prose-hr:my-2"
     >
       {descriptionMd ? (
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{descriptionMd}</ReactMarkdown>

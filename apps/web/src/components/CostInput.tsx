@@ -64,12 +64,21 @@ export function CostInput({ costCents, onSave }: CostInputProps) {
   }
 
   return (
-    // Keyboard reachability for this click-to-edit trigger is tasks/16-accessibility.md's scope.
-    // biome-ignore lint/a11y/useKeyWithClickEvents: tracked in tasks/16-accessibility.md
-    // biome-ignore lint/a11y/noStaticElementInteractions: tracked in tasks/16-accessibility.md
+    // A <span role="button"> rather than a real <button>, matching TodoDescription's click-to-edit
+    // trigger (tasks/16-accessibility.md): this sits inline in a row of other controls, and a real
+    // <button>'s default box/border styling would need overriding anyway.
+    // biome-ignore lint/a11y/useSemanticElements: see comment above.
     <span
+      role="button"
+      tabIndex={0}
       onClick={startEditing}
-      className="cursor-text rounded-md px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          startEditing();
+        }
+      }}
+      className="cursor-text rounded-md px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
     >
       {costCents === null ? <span className="text-slate-400">Add cost…</span> : formatCents(costCents)}
     </span>
