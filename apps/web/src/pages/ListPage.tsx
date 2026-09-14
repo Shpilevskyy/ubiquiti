@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { TodoList } from '../components/TodoList';
 import { ListProvider, useListContext } from '../context/ListContext';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
@@ -70,11 +70,18 @@ function ListPageContent({ listId }: { listId: string }) {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-10">
-      <div className="mx-auto w-full max-w-xl rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-xl font-semibold text-slate-900">{list.title}</h1>
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:py-10">
+      <div className="mx-auto w-full max-w-xl rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-8">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+        >
+          <span aria-hidden="true">←</span> Back to lists
+        </Link>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+            <h1 className="min-w-0 truncate text-xl font-semibold text-slate-900">{list.title}</h1>
             {totalCents > 0 && <span className="text-sm text-slate-400">Total: {formatCents(totalCents)}</span>}
           </div>
 

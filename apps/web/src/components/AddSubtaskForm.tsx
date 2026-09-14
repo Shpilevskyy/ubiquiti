@@ -20,7 +20,7 @@ export function AddSubtaskForm({ todoId }: AddSubtaskFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="ml-7 mt-1 flex gap-2 pl-4">
+    <form onSubmit={handleSubmit} className="ml-5 mt-1 flex gap-2 pl-3 sm:ml-7 sm:pl-4">
       <input
         value={title}
         onChange={(event) => setTitle(event.target.value)}

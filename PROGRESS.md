@@ -1194,6 +1194,35 @@ reproducing the exact failure mode before and after.
       before `prisma migrate deploy` for that one deploy — rather than relying on a human to run it
       against production out-of-band before pushing.
 
+- [x] UI polish, user-requested (not from `tasks/`): a back link on `ListPage` to the landing
+      page, plus a mobile-friendliness pass across `ListPage`/`LandingPage`/`TodoItem`/
+      `SubtaskItem`/`AddSubtaskForm`. Tailwind class changes only, no behavior/logic change.
+      **Back link**: `ListPage` had no way back to the list directory except the browser's own
+      back button. Added a `← Back to lists` `Link` to `/` above the title.
+      **Touch targets weren't tappable at all on a real phone**: the drag handle and Delete
+      buttons on todo/subtask rows, and Delete on the landing page's list rows, were
+      `opacity-0 group-hover:opacity-100` — invisible and (since `group-hover` never fires without
+      a mouse) permanently unreachable on a touchscreen, not just hard to hit. Changed to
+      `opacity-60` by default (dimmed but visible and tappable) rising to full opacity on
+      hover/focus, and gave both buttons real padding (`p-1`/`px-1.5 py-1`) instead of a bare
+      glyph/text as the tap target.
+      **Narrow-viewport layout**: the `ListPage` card's fixed `p-8` padding left very little
+      content width on a 375px phone once combined with the outer `px-4`; made padding/vertical
+      spacing responsive (`p-4 sm:p-8` etc.) on `ListPage`/`LandingPage`. The header row (title +
+      total + Offline pill + presence avatars + Delete list) now wraps (`flex-wrap`) instead of
+      being forced onto one line, and the title truncates (`min-w-0 truncate`) instead of pushing
+      other controls off-screen. The todo row (drag handle, checkbox, title, subtask progress,
+      cost, Delete) also wraps and its title truncates for the same reason; nested indentation
+      (subtasks, description, add-subtask form) shrinks on narrow screens (`ml-5 pl-3` vs.
+      `sm:ml-7 sm:pl-4`) to leave more room for content.
+      **Verified**: clean `typecheck`/`lint`/full production build. Browser-verified against the
+      already-running dev server at a 375×812 (mobile) viewport: landing page list rows show
+      legible, tappable Delete buttons with no hover; opened a list, confirmed the back link
+      returns to the landing page; todo/subtask rows with descriptions, costs, and markdown
+      (including headings and the existing XSS-payload test content) all render without overflow,
+      drag handles and Delete buttons visible and correctly sized without needing hover. Re-checked
+      the same list at desktop width to confirm no regression there. No console errors.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

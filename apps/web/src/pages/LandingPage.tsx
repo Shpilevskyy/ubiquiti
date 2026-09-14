@@ -43,8 +43,8 @@ export function LandingPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8">
         <h1 className="text-xl font-semibold text-slate-900">New list</h1>
         <p className="mt-1 text-sm text-slate-500">Give your list a name to get started.</p>
 
@@ -85,7 +85,7 @@ export function LandingPage() {
                     type="button"
                     onClick={() => handleDeleteList(list.id, list.title)}
                     disabled={deleteList.isPending}
-                    className="shrink-0 rounded px-1 text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="shrink-0 rounded px-1.5 py-1 text-xs text-slate-400 opacity-60 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Delete
                   </button>

@@ -43,24 +43,26 @@ export function TodoItem({ todo }: TodoItemProps) {
 
   return (
     <li ref={setNodeRef} style={style} className={`rounded-lg py-2 ${isDragging ? 'opacity-50' : ''}`}>
-      <div className="group flex items-center gap-3">
+      <div className="group flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-3">
         <button
           type="button"
           {...attributes}
           {...listeners}
           aria-label="Drag to reorder"
-          className="cursor-grab touch-none text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 active:cursor-grabbing"
+          className="-ml-1 shrink-0 cursor-grab touch-none rounded p-1 text-slate-300 opacity-60 transition-opacity hover:text-slate-400 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 active:cursor-grabbing"
         >
           <span aria-hidden="true">⠿</span>
         </button>
-        <label className="flex flex-1 items-center gap-3">
+        <label className="flex min-w-0 flex-1 items-center gap-3">
           <input
             type="checkbox"
             checked={todo.done}
             onChange={() => toggleTodo.mutate({ todoId: todo.id, done: !todo.done })}
             className="h-4 w-4 shrink-0 accent-indigo-600"
           />
-          <span className={`flex-1 text-sm text-slate-900 ${todo.done ? 'text-slate-400 line-through' : ''}`}>
+          <span
+            className={`min-w-0 flex-1 truncate text-sm text-slate-900 ${todo.done ? 'text-slate-400 line-through' : ''}`}
+          >
             {todo.title}
           </span>
         </label>
@@ -77,13 +79,13 @@ export function TodoItem({ todo }: TodoItemProps) {
         <button
           type="button"
           onClick={() => deleteTodo.mutate(todo.id)}
-          className="rounded text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+          className="shrink-0 rounded px-1.5 py-1 text-xs text-slate-400 opacity-60 transition-opacity hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
         >
           Delete
         </button>
       </div>
 
-      <div className="ml-7 pl-4">
+      <div className="ml-5 pl-3 sm:ml-7 sm:pl-4">
         <TodoDescription
           descriptionMd={todo.descriptionMd}
           onSave={(descriptionMd) =>
@@ -97,7 +99,7 @@ export function TodoItem({ todo }: TodoItemProps) {
           items={todo.subtasks.map((subtask) => subtask.id)}
           strategy={verticalListSortingStrategy}
         >
-          <ul className="ml-7 mt-1 flex flex-col gap-1 border-l border-slate-200 pl-4">
+          <ul className="ml-5 mt-1 flex flex-col gap-1 border-l border-slate-200 pl-3 sm:ml-7 sm:pl-4">
             {todo.subtasks.map((subtask) => (
               <SubtaskItem key={subtask.id} subtask={subtask} />
             ))}
@@ -106,7 +108,9 @@ export function TodoItem({ todo }: TodoItemProps) {
       </DndContext>
 
       {todo.subtasks.length > 0 && (
-        <p className="ml-7 mt-1 pl-4 text-xs text-slate-400">Subtotal: {formatCents(subtaskSubtotalCents(todo))}</p>
+        <p className="ml-5 mt-1 pl-3 text-xs text-slate-400 sm:ml-7 sm:pl-4">
+          Subtotal: {formatCents(subtaskSubtotalCents(todo))}
+        </p>
       )}
 
       <AddSubtaskForm todoId={todo.id} />
