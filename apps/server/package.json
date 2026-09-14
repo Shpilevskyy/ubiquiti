@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "PORT=3001 tsx watch src/index.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
+    "db:generate": "prisma generate",
     "start": "prisma migrate deploy && node dist/index.js",
     "db:migrate": "prisma migrate dev",
     "db:backfill-positions": "tsx scripts/backfillPositionKeys.ts"
