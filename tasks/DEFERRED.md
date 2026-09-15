@@ -5,7 +5,10 @@ easy to pick back up.
 
 ## Testing — [../specs/11-testing-strategy.md](../specs/11-testing-strategy.md)
 
-**Deferred by the developer on 2026-09-12.**
+**Deferred by the developer on 2026-09-12. Un-parked on 2026-09-15 — the plan now lives in
+[23-testing.md](23-testing.md), which supersedes the sketch below.** The three priorities named here
+survived into that plan; its step 1 is to correct the stale parts of specs/11 (and of this file —
+the float-precision note below no longer applies since [18](18-fractional-string-indexing.md)).
 
 Status: the strategy doc is written and detailed; **zero tests exist**. No Vitest, no test runner,
 no test files anywhere in the repo.

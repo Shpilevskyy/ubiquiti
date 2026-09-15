@@ -1317,7 +1317,10 @@ only ones remaining, and both are **parked**, not scheduled: both are correct-at
 wrong-at-this-scale; each file lists what would un-park it.
 
 Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
-- [ ] Testing — [specs/11-testing-strategy.md](specs/11-testing-strategy.md)
+- [ ] Testing — un-parked 2026-09-15, planned as [tasks/23-testing.md](tasks/23-testing.md)
+      (8 sequential steps, one PR each); strategy in
+      [specs/11-testing-strategy.md](specs/11-testing-strategy.md), parts of which that task's
+      step 1 corrects
 - [ ] Make repo private after reviewer has seen it
 
 ## Decisions & deviations from specs

@@ -1,9 +1,9 @@
 # Tasks
 
 Backlog from two reviews: a full code review of all three workspaces on **2026-09-12** (tasks
-01–16) and an architecture review on **2026-09-14** (tasks 17–22). Each file is self-contained: a
-fresh session should be able to open one, read it cold, and do the work without re-reviewing the
-whole repo.
+01–16) and an architecture review on **2026-09-14** (tasks 17–22), plus the testing plan written on
+**2026-09-15** (task 23). Each file is self-contained: a fresh session should be able to open one,
+read it cold, and do the work without re-reviewing the whole repo.
 
 **Already landed (2026-09-14), not in this backlog:** conflict detection rewritten from row-`version`
 to per-field `base` values, a `version`-based ordering guard on the realtime update handlers, and
@@ -102,7 +102,22 @@ SSE) that a reviewer is likely to probe. Right now both read as defaults rather 
 file. 22 has a cheap interim step worth taking now: document that single-instance deployment is a
 requirement, not an accident.
 
+### P8 — Testing
+
+Un-parked on 2026-09-15. Unlike every other entry above, [23](23-testing.md) is **one file covering
+eight sequential steps**, each its own session and PR — the shared tooling decisions and test-harness
+hazards are stated once rather than duplicated across eight files. Read its `How to work this`
+section before starting.
+
+| # | Task | Size |
+|---|------|------|
+| [23](23-testing.md) | Test tooling, harnesses, and the suites worth writing | L — 8 steps |
+
+**Steps 1 and 2 are prerequisites**, and step 2 is a refactor with no tests in it: the server cannot
+currently be tested at all, because `index.ts` calls `app.listen()` at module scope and so can't be
+imported. Steps 4–8 can be reordered or cut without breaking each other.
+
 ### Parked
 
-See [DEFERRED.md](DEFERRED.md) — testing and making the repo private, explicitly deprioritized by
-the developer on 2026-09-12.
+See [DEFERRED.md](DEFERRED.md) — making the repo private. Testing was also parked there on
+2026-09-12 and has since been picked back up as [23](23-testing.md).
