@@ -245,7 +245,7 @@ The cheapest real signal in the repo. All four targets are pure functions or pla
 
 ### Step 5 — Outbox tests
 
-**Status:** not started · **Size:** M–L — the highest-value step in this task
+**Status:** done (2026-09-15) · **Size:** M–L — the highest-value step in this task
 
 [../apps/web/src/lib/outboxSync.ts](../apps/web/src/lib/outboxSync.ts) is the most intricate logic
 in the app and the site of the defects fixed in [03](03-outbox-reliability.md) and
@@ -278,9 +278,9 @@ in the app and the site of the defects fixed in [03](03-outbox-reliability.md) a
   and any pending timeout.
 
 **Done when:**
-- [ ] Every bullet above has an assertion
-- [ ] No test depends on another test's leftover module state
-- [ ] Suite runs in well under a second (fake timers, no real waiting)
+- [x] Every bullet above has an assertion
+- [x] No test depends on another test's leftover module state
+- [x] Suite runs in well under a second (fake timers, no real waiting)
 
 ---
 

@@ -1437,6 +1437,71 @@ reproducing the exact failure mode before and after.
       these 4). Full `typecheck`/`lint`/`format:check`/`build` clean; confirmed `dist/` still has
       no `.test.*` output (tsconfig.build.json from step 3 still doing its job).
 
+- [x] Testing, step 5/8 — outbox tests, the task's own "highest-value step" —
+      [tasks/23-testing.md](tasks/23-testing.md#step-5--outbox-tests). 16 new tests across
+      [outbox.test.ts](apps/web/src/lib/outbox.test.ts) (queue atomicity) and
+      [outboxSync.test.ts](apps/web/src/lib/outboxSync.test.ts) (the flush/retry/poll policy) —
+      every bullet in the step's checklist, covering the exact defects
+      [tasks/03](tasks/03-outbox-reliability.md) and [tasks/05](tasks/05-cache-reconciliation.md)
+      fixed.
+      **Harness**: `vi.mock('./api', importOriginal)` keeps the real `HttpError` class (the retry
+      policy branches on `instanceof HttpError`/`.status`) while stubbing `sendOp`, per the
+      Tooling table. Module-level state in `outboxSync.ts` (the `states` Map) and
+      `connectionStatus.ts` (`status`, its `window` listeners) is reset between tests with
+      `vi.resetModules()` + dynamic `import()`, per the Hazards section — not a test-only reset
+      hook added to production code.
+      **A real gap in the Tooling table's own plan, found and worked around**: `fake-indexeddb`
+      schedules every IndexedDB request callback via the *real* `setImmediate`, not
+      `setTimeout`/`queueMicrotask` — confirmed by reading
+      `node_modules/fake-indexeddb/build/esm/lib/scheduling.js` directly rather than assumed.
+      Faking every timer (`vi.useFakeTimers()` with no options, as the Tooling table's one-line
+      mention implies) would freeze IndexedDB itself, since `idb-keyval`'s operations depend on it
+      — every `getQueue`/`enqueue`/`dequeue` call would simply hang. Fixed by faking only
+      `setTimeout`/`clearTimeout`/`setInterval`/`clearInterval` (what `outboxSync.ts` actually
+      uses for its own backoff/poll timers) and leaving `setImmediate` real, then flushing pending
+      real macrotasks with a small helper between assertions. This is the load-bearing discovery
+      of this step — without it, the harness described in tasks/23 doesn't actually run.
+      **A backoff-precision test that initially passed the wrong way**: the first draft of "backs
+      off with a doubling delay" split each round into a "just under the expected delay" advance
+      and a separate "+1ms" advance (to also prove it doesn't fire early), and failed with one
+      extra call partway through. Root cause, found by instrumenting both the failing test and a
+      working one side by side rather than guessing: `outboxSync.ts`'s 15s poll interval and its
+      backoff retry timer share the same `isFlushing` guard, so when both come due within one
+      `vi.advanceTimersByTimeAsync()` call, the guard correctly collapses them to a single
+      attempt — but splitting the advance into several smaller awaited calls (each separated by a
+      real macrotask flush) gives the poll's due moment its own independent turn *after* the
+      preceding attempt has already finished and reset the guard, producing a genuine extra
+      attempt. Real, correct interaction between the two timers, not a test bug — fixed by
+      advancing by each full expected delay in one call per round (matching the pattern that
+      already worked in the MAX_FLUSH_ATTEMPTS test) and dropping the "not a moment before" half
+      of the check, with a comment recording why.
+      **Coverage**: FIFO ordering with each op awaited before the next (proven by holding the
+      first mocked response open and asserting the second is never sent early, not just asserting
+      final order); success → dequeue + `connectionStatus.markOnline()`; 404 → dequeue + notice +
+      continues past it; any other 4xx → dequeue + discarded notice + continues past it; a
+      network/5xx failure leaves the *whole* queue untouched behind the head op and schedules
+      exactly one retry timer (`vi.getTimerCount()`); the full 2s→4s→8s→16s→30s→30s backoff
+      schedule; the 10th failed attempt (not before) drops the op; the `isFlushing` guard against
+      two overlapping triggers double-sending the head op; `hadConflict` aggregated to one notice
+      per flush across two ops, not two; `reconcile: true` invalidating on a genuinely empty queue
+      (first confirmed a *non*-reconcile mount-time flush does *not* invalidate on empty, so the
+      assertion isolates what `reconcile` specifically contributes); and ref-counted `start()`/
+      `stop()` — two callers share one poll interval and one mount-time flush, stopping one leaves
+      the other's callbacks live, and the last `stop()` clears every timer
+      (`vi.getTimerCount() === 0`).
+      **`outbox.ts` atomicity** (the direct regression test for tasks/03): concurrent `enqueue`
+      calls for the same list both land (real `idb-keyval` `update()` transactions, not a mocked
+      store, so this actually exercises the fix); an `enqueue` racing a `dequeue` loses neither;
+      `recordAttempt` increments and returns `0` for an already-dequeued op; queues for different
+      `listId`s never interleave.
+      **Verified**: `npm test` — 50/50 across 8 files in ~1s. Full
+      `typecheck`/`lint`/`format:check`/`build` clean (one small fix needed: `apps/web`'s tsconfig
+      has no Node types, being a browser app, so the test file's use of the real `setImmediate`
+      needed a narrow local `declare const setImmediate` rather than pulling in all of
+      `@types/node`'s globals for one function). Re-ran the full `outboxSync.test.ts`/
+      `outbox.test.ts` pair 5× in a row to check for flakiness given how timer-sensitive this
+      harness is — stable every time.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
