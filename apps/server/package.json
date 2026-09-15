@@ -15,6 +15,7 @@
   "devDependencies": {
     "@types/node": "^22.20.2",
     "prisma": "^6.19.1",
+    "socket.io-client": "^4.8.3",
     "tsx": "^4.23.13"
   },
   "dependencies": {

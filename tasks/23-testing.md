@@ -337,7 +337,7 @@ to avoid a COUNT), `limit`/`offset` coercion and bounds.
 
 ### Step 7 — One real socket test
 
-**Status:** not started · **Size:** S · **Depends on:** [Step 6](#step-6--server-integration-tests)
+**Status:** done (2026-09-15) · **Size:** S · **Depends on:** [Step 6](#step-6--server-integration-tests)
 
 The spy in step 6 proves each route *asks* for the right broadcast. This proves the wiring actually
 delivers it. **One** test, with a real listening server and two `socket.io-client` connections:
@@ -350,8 +350,8 @@ Deliberately not more than this — it needs real ports and real timing, so it i
 in the suite. Everything cheaper to assert belongs in step 6.
 
 **Done when:**
-- [ ] Realtime delivery and sender exclusion proven end to end
-- [ ] Server torn down cleanly; no open handles left hanging the run
+- [x] Realtime delivery and sender exclusion proven end to end
+- [x] Server torn down cleanly; no open handles left hanging the run
 
 ---
 

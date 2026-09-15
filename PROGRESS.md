@@ -1586,6 +1586,40 @@ reproducing the exact failure mode before and after.
       aborted with no TTY rather than proceeding) before moving on. Flagging for whoever picks this
       up next rather than touching the dev database further mid-testing-task.
 
+- [x] Testing, step 7/8 — one real socket test —
+      [tasks/23-testing.md](tasks/23-testing.md#step-7--one-real-socket-test). New
+      [realtime.test.ts](apps/server/src/realtime.test.ts), deliberately the only test in the
+      whole suite that binds a real port: `app.listen({ port: 0 })` for an OS-assigned ephemeral
+      port (no fixed-port collision with the shared dev server or anything else running locally),
+      a real `SocketIOServer` attached to `app.server`, and two real `socket.io-client`
+      connections. Everything cheaper than this belongs in step 6's spy-broadcaster tests, which
+      already prove each route *asks* for the right broadcast — this is the one proof that it's
+      actually *delivered*.
+      **The same app.server/io/broadcaster construction-order shim from
+      [index.ts](apps/server/src/index.ts)** (step 2), copied into the test rather than imported,
+      since it's test-harness wiring rather than something worth exposing from production code for
+      one caller.
+      **One assertion bug, caught by the assertion itself rather than a silent false pass**: the
+      first draft waited for *any* `presence:update` on client A to prove "both members present
+      after B joins," but A's own `list:join` already broadcasts presence (with just A) before B
+      ever joins — the naive wait resolved on that first, wrong event and failed with a length-1
+      array where 2 was expected. Fixed by making `waitForEvent` take a predicate (`members.length
+      === 2` / `=== 1`) instead of matching the first occurrence of the event name, so both the
+      "both present" and "back to one after B disconnects" waits pin the exact state being tested
+      rather than a race against which presence update arrives first.
+      **New devDependency**: `socket.io-client` added to `apps/server` (already a dependency of
+      `apps/web`, same version pinned) — the server side never needed a client library before.
+      **Verified**: proves real delivery + sender exclusion (A's own REST mutation, sent with A's
+      `x-client-id`, reaches B but is confirmed absent from A after a real wait, not just
+      "eventually consistent") and both presence transitions (member list grows to 2 when B joins,
+      shrinks back to 1 when B disconnects). Re-ran 15× in a row with no failures — the one thing
+      this step's own framing calls out as the flakiest test in the suite, so this got real
+      repetition, not a single lucky pass. Full server suite (54 tests) still completes in ~2s with
+      this test included, and exits cleanly with no lingering handles (confirmed via `time` — the
+      process returns control immediately, no forced-exit needed). Full monorepo `npm test` (90
+      tests), `typecheck`, `lint`, `format:check`, `build` all clean; `dist/` still free of test
+      code.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
