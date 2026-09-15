@@ -174,7 +174,7 @@ serves the API, the UI, and realtime; SIGTERM still shuts down gracefully.
 
 ### Step 3 — Vitest scaffolding and the CI test step
 
-**Status:** not started · **Size:** S
+**Status:** done (2026-09-15) · **Size:** S
 
 Infrastructure only, with just enough of a test to prove the wiring works end to end.
 
@@ -191,9 +191,9 @@ Infrastructure only, with just enough of a test to prove the wiring works end to
   convention for this repo) and make sure Biome's `includes` and the `tsconfig`s cover them.
 
 **Done when:**
-- [ ] `npm test` runs both projects green from a clean checkout
-- [ ] CI runs the suite on push and PR
-- [ ] Lint and typecheck pass over the test files themselves
+- [x] `npm test` runs both projects green from a clean checkout
+- [x] CI runs the suite on push and PR
+- [x] Lint and typecheck pass over the test files themselves
 
 ---
 

@@ -1335,6 +1335,55 @@ reproducing the exact failure mode before and after.
       typechecks. Sent `SIGTERM` and confirmed the same clean-exit log sequence as before this
       refactor. Cleaned up the throwaway test list afterward.
 
+- [x] Testing, step 3/8 — Vitest scaffolding and the CI test step —
+      [tasks/23-testing.md](tasks/23-testing.md#step-3--vitest-scaffolding-and-the-ci-test-step).
+      Infrastructure only: one root [vitest.config.ts](vitest.config.ts) with two `test.projects`
+      entries (`server`: node environment, `fileParallelism: false` per the Hazards section — the
+      route handlers' `prisma.$transaction` usage rules out the usual per-test-transaction-rollback
+      trick, so step 6's integration tests will TRUNCATE a shared test DB instead, which only stays
+      correct with test files serialized; `web`: jsdom + a `setupFiles` entry installing
+      `fake-indexeddb/auto`, since jsdom itself has no IndexedDB and `outbox.ts` has no in-memory
+      fallback). One deliberately trivial test per project (`apps/server/src/scaffold.test.ts`,
+      `apps/web/src/test/scaffold.test.ts`) — not a no-op assertion, but a real check that each
+      project's environment/setup actually took effect (node has no `window`; jsdom has both
+      `window` and `indexedDB`). `npm test`/`npm run test:watch` added at the root; per-workspace
+      `npm run test -w @ubiquiti-todo/server`/`-w @ubiquiti-todo/web` also work (each workspace's
+      `test` script points `--config`/`--project` back at the root config).
+      **Two file-path pitfalls found and fixed while wiring this, not anticipated from the task's
+      own sketch**: (1) a project's `test.root` inside `vitest.config.ts` resolves against the
+      *process's* cwd, not the config file's own directory — so the natural-looking
+      `root: './apps/server'` broke the moment the per-workspace scripts ran `vitest` from inside
+      `apps/server` instead of the repo root. Fixed with an absolute path built from
+      `fileURLToPath(new URL(relative, import.meta.url))`, cwd-independent either way. (2) test
+      files matched `apps/server/tsconfig.json`'s `include: ["src"]`, so `tsc -p tsconfig.json`
+      (the **build** script — real emit, unlike the noEmit typecheck script) was compiling
+      `scaffold.test.ts` straight into `dist/`, alongside the code Render actually runs. New
+      [apps/server/tsconfig.build.json](apps/server/tsconfig.build.json) (extends the base config,
+      adds `exclude: ["src/**/*.test.ts"]`) is now what `build` points at; `typecheck` still uses
+      the unmodified `tsconfig.json`, so test files stay type-checked, just not shipped — the
+      "Lint and typecheck pass over the test files themselves" done-when item and "no test code in
+      the production bundle" both hold at once.
+      **Test file convention decided and recorded** (the task's own ask): `*.test.ts`/`*.test.tsx`
+      next to the source file it covers — already Biome's `includes`/both `tsconfig`s' `include`
+      scope, so no config change was needed there beyond the build-vs-typecheck split above.
+      **CI**: added a `Test` step (`npm test`) to
+      [.github/workflows/ci.yml](.github/workflows/ci.yml), between build-shared and typecheck —
+      no Postgres service container yet, deliberately, per the step's own note that it arrives
+      with step 6.
+      **Also added `"type": "module"` to the root [package.json](package.json)**: without it,
+      loading `vitest.config.ts` (ESM syntax, no matching root package type) printed a real,
+      if non-fatal, "unsupported by configLoader: 'native'" warning on every run; every other
+      `package.json` in the repo already declares this, and the root had no plain `.js` files for
+      it to change the interpretation of.
+      **Verified**: `npm test` green at the root and via both per-workspace scripts; full
+      `typecheck`/`build`/`lint`/`format:check` all clean, and `dist/` confirmed to contain no
+      `.test.*` files after a build. Re-ran this repo's existing clean-room check (tasks/12) —
+      copied the exact tracked-plus-new-untracked file set (`git ls-files --cached --others
+      --exclude-standard`, since the new files aren't committed yet) into a scratch directory,
+      `npm ci`, then the literal CI step sequence (build shared → test → typecheck → lint →
+      format:check) — all green from a fresh install, not just in this already-`npm install`ed
+      working tree.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

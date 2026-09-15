@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run --config ../../vitest.config.ts --project web"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

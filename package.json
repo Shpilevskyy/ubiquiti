@@ -2,6 +2,7 @@
   "name": "ubiquiti-todo",
   "private": true,
   "version": "0.0.1",
+  "type": "module",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -12,13 +13,19 @@
     "start": "npm run start -w @ubiquiti-todo/server",
     "db:generate": "npm run db:generate -w @ubiquiti-todo/server",
     "typecheck": "npm run db:generate && npm run build -w @ubiquiti-todo/shared && tsc --noEmit -p apps/server/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "biome lint .",
     "format:check": "biome format .",
     "format": "biome format --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
+    "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
-    "typescript": "^7.0.2"
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
   }
 }
