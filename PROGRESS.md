@@ -1620,6 +1620,72 @@ reproducing the exact failure mode before and after.
       tests), `typecheck`, `lint`, `format:check`, `build` all clean; `dist/` still free of test
       code.
 
+- [x] Testing, step 8/8 — frontend hook and component tests, **completing tasks/23-testing.md** —
+      [tasks/23-testing.md](tasks/23-testing.md#step-8--frontend-hook-and-component-tests). 27
+      new tests: [useList.test.tsx](apps/web/src/hooks/useList.test.tsx) (5),
+      [TodoDescription.test.tsx](apps/web/src/components/TodoDescription.test.tsx) (8),
+      [TodoItem.test.tsx](apps/web/src/components/TodoItem.test.tsx) (5),
+      [CostInput.test.tsx](apps/web/src/components/CostInput.test.tsx) (6), and
+      [SubtaskProgress.test.tsx](apps/web/src/components/SubtaskProgress.test.tsx) (3).
+      **New devDependencies**: `@testing-library/react`, `@testing-library/user-event`, and
+      `@testing-library/jest-dom` (the last isn't named in tasks/23's Tooling table, only implied
+      by "@testing-library/react" — without its `.toBeInTheDocument()`/`.toHaveValue()` matchers,
+      every assertion would fall back to raw `.textContent`/`.value` reads). Wired into
+      [test/setup.ts](apps/web/src/test/setup.ts) alongside a global `afterEach(cleanup)` — needed
+      because `@testing-library/react`'s own auto-cleanup only self-registers against a *global*
+      `afterEach`, and this project imports `afterEach` per file (no `test.globals: true`), so
+      nothing would otherwise unmount a rendered component between tests.
+      **A real isolation conflict with the Hazards section's own pattern, reasoned through rather
+      than copied blindly**: `outboxSync.test.ts` (step 5) resets module state with
+      `vi.resetModules()` + dynamic `import()` per test. Doing the same here would also tear down
+      React's own module instance — imported statically, the same instance
+      `@testing-library/react`'s `renderHook`/`render` use — breaking hooks entirely. Used instead:
+      a fresh `QueryClient` and a fresh random `listId` per test (so outbox/IndexedDB state, keyed
+      by listId, never collides across tests), plus an explicit `connectionStatus.markOnline()`
+      reset in `beforeEach` — the only piece of cross-test module state `useList`'s own code path
+      actually touches. `../lib/outboxSync` itself is mocked to a no-op `start`, so these tests
+      exercise only `useList`'s foreground `mutateWithOutbox` path (the background flush/poll loop
+      is already exhaustively covered by step 5) without a concurrent background flush racing the
+      same mocked `sendOp`.
+      **`useList` coverage**: a toggle updates the query cache before `sendOp`'s promise resolves
+      (held open deliberately), then reconciles to the server's exact response once it does —
+      checked against a `version` value only the server would set, plus a full subscription-history
+      recording proving `done` never reverts to `false` in between, not just that the final state
+      is eventually correct. A 404 drops the queued op (`getQueue` empty) and triggers a real
+      refetch (`api.getList` called a second time). A network error (a plain `TypeError`, not an
+      `HttpError`) leaves the op queued rather than dropped. `deleteList`/`updateListTitle` while
+      offline both fail fast with their respective notices and never call the underlying `api.*`
+      method — the exact tasks/06 behavior (pause-invisibly was the bug fixed there).
+      **`TodoDescription` coverage**, including the one behavior this task calls out by name: an
+      incoming prop update (simulating a realtime broadcast landing in the cache) while the
+      textarea is open leaves the open draft untouched, and a *second* test confirms re-entering
+      edit mode afterward picks up the latest prop value rather than a stale one — both halves of
+      "don't clobber, but don't go stale either" from specs/09.
+      **`TodoItem` coverage** ("lighter touch," per the task): rendered through the real
+      `ListProvider` (not a mocked context — `ListContext`'s underlying context object isn't
+      exported, and changing that to ease testing was out of this step's scope) wrapped in a
+      minimal `DndContext`/`SortableContext` (`useSortable` requires one). Renders title/checkbox
+      state correctly for both done/not-done; a real click on the checkbox sends the exact PATCH
+      body through the full `ListProvider -> useList -> mutateWithOutbox -> sendOp` chain; the
+      checkbox's accessible name (tasks/16) and `SubtaskProgress`'s presence/subtotal-hiding
+      wiring both render correctly in context.
+      **`CostInput`/`SubtaskProgress`**: blur commits a parsed value, invalid input reverts
+      silently with no `onSave` call, `COST_CENTS_MAX` refused (computed from the real exported
+      constant, not hard-coded), Escape discards, an unchanged value doesn't call `onSave`; done/
+      total counts and the zero-subtasks `null` render.
+      **Playwright stretch (specs/11) not attempted** — explicitly "cut first if time is short" in
+      both specs/11 and this task's own step 8 framing, and every one of step 8's actual "Done
+      when" items is satisfied without it.
+      **Verified**: full web suite (63 tests) run 10× in a row clean. Full monorepo `npm test` —
+      **117 tests across 18 files, 0 failures** — plus `typecheck`, `lint`, `format:check`, and
+      `build` all clean; `dist/` (both workspaces) confirmed free of test code.
+      **tasks/23-testing.md is now fully done — all 8 steps landed, one PR each, as the task's own
+      "do not batch them" instruction asked for.** `CI green on a pushed branch` (the task's whole-
+      task verification bullet) is the one thing not literally confirmed from here: the workflow is
+      correctly configured and its Postgres-migration step was verified locally end-to-end against
+      a freshly created database (step 6), but this session hasn't pushed to the remote, so an
+      actual GitHub Actions run is still unobserved.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
@@ -1658,10 +1724,9 @@ only ones remaining, and both are **parked**, not scheduled: both are correct-at
 wrong-at-this-scale; each file lists what would un-park it.
 
 Deferred deliberately (see [tasks/DEFERRED.md](tasks/DEFERRED.md)):
-- [ ] Testing — un-parked 2026-09-15, planned as [tasks/23-testing.md](tasks/23-testing.md)
-      (8 sequential steps, one PR each); strategy in
-      [specs/11-testing-strategy.md](specs/11-testing-strategy.md), parts of which that task's
-      step 1 corrects
+- [x] Testing — un-parked and completed 2026-09-15, all 8 steps of
+      [tasks/23-testing.md](tasks/23-testing.md) landed (one PR each, per that task's own
+      instruction not to batch them); see the Completed entries above, one per step.
 - [ ] Make repo private after reviewer has seen it
 
 ## Decisions & deviations from specs

@@ -1,6 +1,7 @@
 # 23 — Testing: tooling, harnesses, and the suites worth writing
 
-**Status:** not started — see the per-step Status lines under [Steps](#steps)
+**Status:** done (2026-09-15) — all 8 steps landed; see the per-step Status lines under
+[Steps](#steps)
 **Size:** L overall — **deliberately split into 8 independently reviewable steps**, one per
 session/PR. Do not batch them.
 **Depends on:** —
@@ -357,7 +358,7 @@ in the suite. Everything cheaper to assert belongs in step 6.
 
 ### Step 8 — Frontend hook and component tests
 
-**Status:** not started · **Size:** M
+**Status:** done (2026-09-15) · **Size:** M
 
 React Testing Library + jsdom, `lib/api` mocked at the boundary.
 
@@ -383,9 +384,9 @@ asserting realtime propagation, and one using `context.setOffline(true)` for the
 offline → reconnect → sync flow. Only if everything above has landed.
 
 **Done when:**
-- [ ] Optimistic-update and no-flicker behavior asserted
-- [ ] The mid-edit clobber protection asserted
-- [ ] Component tests assert behavior, not markup
+- [x] Optimistic-update and no-flicker behavior asserted
+- [x] The mid-edit clobber protection asserted
+- [x] Component tests assert behavior, not markup
 
 ---
 
