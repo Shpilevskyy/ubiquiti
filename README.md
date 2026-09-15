@@ -64,6 +64,38 @@ Other useful scripts (see [package.json](package.json) at the root and in each w
 is up (`docker-compose ps`) and that nothing else on the machine is already bound to port 5432.
 
 
+## Running tests
+
+```bash
+npm test          # both projects, once
+npm run test:watch
+```
+
+Also runnable per workspace (`npm run test -w @ubiquiti-todo/server`, `-w @ubiquiti-todo/web`).
+See [specs/11-testing-strategy.md](specs/11-testing-strategy.md) and
+[tasks/23-testing.md](tasks/23-testing.md) for what's covered and why.
+
+The `web` project (jsdom + `fake-indexeddb`) needs no setup beyond `npm install`. The `server`
+project's integration tests use a **real, separate** Postgres database —
+`ubiquiti_todo_test` — on the same docker-compose instance `npm run dev` uses, truncated between
+tests rather than mocked, since the interesting bugs here (the P2002 create race, the
+`$transaction` conflict check, FK→404 mapping) are exactly what an ORM mock would hide.
+`./scripts/setup.sh` creates and migrates it automatically; the manual equivalent:
+
+```bash
+docker-compose exec postgres psql -U ubiquiti -d ubiquiti_todo -c 'CREATE DATABASE ubiquiti_todo_test'
+cd apps/server && DATABASE_URL="postgresql://ubiquiti:ubiquiti@localhost:5432/ubiquiti_todo_test" \
+  npx prisma migrate deploy
+```
+
+(`migrate deploy`, not the `db:migrate` script above — that's `prisma migrate dev`, which prompts
+interactively on a checksum mismatch and isn't what CI or this test setup uses.)
+
+(Re-run the migrate step after pulling new migrations — `npm test` doesn't do this for you.) CI
+runs the same migration against a fresh Postgres service container on every push, per
+[.github/workflows/ci.yml](.github/workflows/ci.yml).
+
+
 ## User stories:
 * I as a user can create to-do items, such as a grocery list.
 

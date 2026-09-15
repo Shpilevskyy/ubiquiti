@@ -286,7 +286,7 @@ in the app and the site of the defects fixed in [03](03-outbox-reliability.md) a
 
 ### Step 6 — Server integration tests
 
-**Status:** not started · **Size:** M–L · **Depends on:** [Step 2](#step-2--extract-buildapp-from-indexts)
+**Status:** done (2026-09-15) · **Size:** M–L · **Depends on:** [Step 2](#step-2--extract-buildapp-from-indexts)
 
 Real Postgres, `app.inject()`, spy broadcaster. The harness is a meaningful share of this step's
 diff — build it deliberately.
@@ -329,9 +329,9 @@ room, and `excludeMemberId` taken from the `x-client-id` header.
 to avoid a COUNT), `limit`/`offset` coercion and bounds.
 
 **Done when:**
-- [ ] Harness is reusable and documented in the README's local-dev section
-- [ ] CI runs the integration suite against a Postgres service container
-- [ ] Every bullet above has an assertion
+- [x] Harness is reusable and documented in the README's local-dev section
+- [x] CI runs the integration suite against a Postgres service container
+- [x] Every bullet above has an assertion
 
 ---
 

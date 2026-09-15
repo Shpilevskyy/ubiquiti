@@ -37,5 +37,18 @@ done
 echo "==> Applying Prisma migrations"
 npm run db:migrate -w @ubiquiti-todo/server
 
+echo "==> Creating the test database (tasks/23-testing.md step 6, idempotent)"
+"${DC[@]}" exec -T postgres psql -U ubiquiti -d ubiquiti_todo -tc \
+  "SELECT 1 FROM pg_database WHERE datname = 'ubiquiti_todo_test'" | grep -q 1 ||
+  "${DC[@]}" exec -T postgres psql -U ubiquiti -d ubiquiti_todo -c 'CREATE DATABASE ubiquiti_todo_test'
+
+echo "==> Applying Prisma migrations to the test database"
+(
+  cd apps/server
+  DATABASE_URL="postgresql://ubiquiti:ubiquiti@localhost:5432/ubiquiti_todo_test" \
+    npx prisma migrate deploy
+)
+
 echo
-echo "Setup complete. Run 'npm run dev' to start the API (port 3001) and web app (port 5173)."
+echo "Setup complete. Run 'npm run dev' to start the API (port 3001) and web app (port 5173),"
+echo "or 'npm test' to run the test suite (the server project needs the test database above)."

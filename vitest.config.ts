@@ -24,6 +24,12 @@ export default defineConfig({
           // beforeEach, which is only safe if test files never run concurrently against it — see
           // tasks/23-testing.md's Hazards section.
           fileParallelism: false,
+          // A separate database from the one `npm run dev` uses, on the same docker-compose
+          // Postgres — see README's "Running tests" section for the one-time create + migrate
+          // step (scripts/setup.sh does it too). Same host/credentials as apps/server/.env.example
+          // (a local-only, already-public dev password, not a secret) so this needs no per-machine
+          // configuration; CI's Postgres service container is set up to match.
+          env: { DATABASE_URL: 'postgresql://ubiquiti:ubiquiti@localhost:5432/ubiquiti_todo_test' },
         },
       },
       {

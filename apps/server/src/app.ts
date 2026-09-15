@@ -26,11 +26,16 @@ const webDist = path.resolve(__dirname, '../../web/dist');
 export async function buildApp(options: {
   broadcaster: SocketBroadcaster;
   isProduction: boolean;
+  // Defaults to Fastify's own request/response logging (index.ts relies on this, unchanged).
+  // The step 6 integration test harness passes `false` — pino writes straight to stdout,
+  // bypassing Vitest's console interception, so dozens of tests each spinning up their own app
+  // would otherwise print a JSON line per request regardless of pass/fail.
+  logger?: boolean;
 }): Promise<FastifyInstance> {
-  const { broadcaster, isProduction } = options;
+  const { broadcaster, isProduction, logger = true } = options;
 
   const app = Fastify({
-    logger: true,
+    logger,
     // Public, unauthenticated, internet-facing API with no per-field length limits in the shared
     // zod schemas yet — the largest legitimate payload here is a markdown description. 256KB is
     // generous for that and well below Fastify's 1MB default (tasks/14).

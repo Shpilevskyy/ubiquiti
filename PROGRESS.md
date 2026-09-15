@@ -1502,6 +1502,90 @@ reproducing the exact failure mode before and after.
       `outbox.test.ts` pair 5× in a row to check for flakiness given how timer-sensitive this
       harness is — stable every time.
 
+- [x] Testing, step 6/8 — server integration tests, against a real Postgres —
+      [tasks/23-testing.md](tasks/23-testing.md#step-6--server-integration-tests). 39 new tests
+      across [lists.test.ts](apps/server/src/routes/lists.test.ts),
+      [todos.test.ts](apps/server/src/routes/todos.test.ts),
+      [subtasks.test.ts](apps/server/src/routes/subtasks.test.ts), and
+      [errorShape.test.ts](apps/server/src/errorShape.test.ts) — every bullet in the step's
+      checklist, built on step 2's `buildApp()`.
+      **New `ubiquiti_todo_test` database**, same docker-compose Postgres, separate from the one
+      `npm run dev` uses. `scripts/setup.sh` now creates + migrates it (idempotent, guarded with a
+      `pg_database` existence check before `CREATE DATABASE`); `vitest.config.ts`'s `server`
+      project injects its `DATABASE_URL` directly via `test.env`, so `prisma.ts`'s module-scope
+      `new PrismaClient()` picks it up before any test file imports anything. Documented in a new
+      README "Running tests" section, including the manual equivalent of what setup.sh does.
+      **New [`test/harness.ts`](apps/server/src/test/harness.ts)**: `buildTestApp()` wraps
+      `buildApp()` with a `vi.fn()`-based `SpyBroadcaster`; `truncateAll()` (`TRUNCATE ...
+      RESTART IDENTITY CASCADE`, per the Hazards section — the routes' `prisma.$transaction` usage
+      rules out the usual transaction-rollback isolation trick) runs in each file's `beforeEach`;
+      `createList`/`createTodo`/`createSubTask` are thin `app.inject()` wrappers, dogfooding the
+      real POST routes as fixtures rather than writing rows directly via Prisma. One `buildTestApp()`
+      per test *file* (`beforeAll`), not per test — `broadcaster.broadcastToList.mockClear()` in
+      `beforeEach` instead — since nothing about a stateless Fastify instance needs rebuilding
+      per test, and building 40+ of them (helmet/rate-limit/zod-compiler setup each time) would
+      have been pure overhead.
+      **A quiet, unplanned side effect fixed while building the harness**: `buildApp()`'s
+      `logger: true` writes real JSON log lines straight to stdout via pino, which bypasses
+      Vitest's console interception entirely (pino doesn't go through `console.*`) — every one of
+      dozens of integration tests would otherwise print a request/response log line regardless of
+      pass/fail. Fixed by adding an optional `logger` parameter to `buildApp()`'s options
+      (defaulting to `true`, so `index.ts`'s call is completely unaffected — zero behavior change
+      for production), which the harness sets to `false`.
+      **A real, reviewer-relevant gap found and fixed in the same pass**: `apps/server/tsconfig.build.json`
+      (added in step 3 to keep `*.test.ts` files out of `dist/`) didn't catch `test/harness.ts` —
+      a file that itself has no `.test.ts` suffix — so it was silently compiling straight into
+      `dist/test/harness.js` alongside the code Render actually runs. Fixed by also excluding
+      `src/test/**`, confirmed by deleting `dist` and rebuilding clean.
+      **A flaky test found and fixed, not just noticed**: an offset-pagination test assumed
+      three back-to-back `createList()` calls would land in creation order under
+      `ORDER BY createdAt DESC`, but `createdAt` is millisecond-precision with no secondary sort
+      key — a real, unindexed-tiebreak property of the endpoint itself, not a test bug — so three
+      rapid creates can legitimately land in the same millisecond with Postgres free to return them
+      in either order. Reproduced directly (1 failure in ~25 runs, exact mismatch confirmed via the
+      diff) rather than assumed from reasoning alone, then fixed by deriving the "expected middle
+      item" from the server's own reported order (an unpaginated fetch first) instead of assuming
+      insertion order — self-consistent regardless of how ties resolve. Re-ran 20× clean afterward.
+      **Coverage**: idempotent create — sequential and, the actual regression (tasks/19), truly
+      *concurrent* duplicate POSTs for both todos and subtasks, each producing exactly one row;
+      POST to a deleted/nonexistent parent 404s via the real P2003→404 path, not a 500. Conflict
+      signaling — disagreeing/matching/different-field `base`, mirroring conflict.test.ts's unit
+      coverage but through the real transaction. Route scoping — PATCH/DELETE with a mismatched
+      `listId` 404 with the row provably unmutated and *nothing broadcast* (the actually-dangerous
+      failure mode: a wrong-room broadcast leaves real viewers silently stale), for todos and,
+      one level deeper, subtasks (both the right-todo-wrong-list and wrong-todo-entirely cases).
+      Delete idempotency, distinct from the wrong-parent 404. Error shape — 400 (zod), 404, 413
+      (a real >256KB body), and a 500 that doesn't leak the underlying message (via a throwaway
+      route on a dedicated app instance, exercising the real registered handler's generic branch —
+      no route in this app actually 500s under normal conditions, which says something good about
+      the validation/P2025/P2003 coverage elsewhere, not something to route around). `GET
+      /api/lists` pagination — `hasMore` at the exact boundary, non-numeric/out-of-range
+      `limit`/`offset` 400ing.
+      **Verified**: full server suite (53 tests: 13 from step 4's units plus the step 3 scaffold
+      placeholder plus these 39) run 15×
+      in a row clean after the flaky test fix — one genuine failure caught and fixed *before* that
+      streak, not papered over. Full monorepo `npm test` (89 tests total), `typecheck`, `lint`,
+      `format:check`, and `build` all clean, `dist/` confirmed free of anything under `src/test/`.
+      Re-ran this repo's clean-room check against a **freshly dropped and recreated**
+      `ubiquiti_todo_test` (not the already-migrated one every other check in this session reused)
+      to prove the from-scratch migration path CI will actually exercise: fresh `npm ci`, build
+      shared, typecheck, `prisma migrate deploy` against the empty database (all 4 migrations
+      applied cleanly), test, lint, format:check — green end to end.
+      **CI**: added a `postgres:17-alpine` service container to
+      [.github/workflows/ci.yml](.github/workflows/ci.yml) (`POSTGRES_DB: ubiquiti_todo_test`
+      creates the test database directly) plus a "Migrate test database" step
+      (`prisma migrate deploy`) before the existing Test step. Same credentials as local dev
+      throughout — a local-only, already-public dev password, not a secret, consistent with how
+      `.env.example` already handles this.
+      **Found in passing, not fixed here**: running the *existing* `db:migrate` script
+      (`prisma migrate dev`) against the shared local dev database hit an interactive
+      "migration was modified after it was applied, reset the schema?" prompt — unrelated to this
+      session's changes (no migration file was touched), pre-existing, and orthogonal to this
+      task's scope (the new test-database path uses `migrate deploy`, which has no such prompt, so
+      nothing here depends on it). Confirmed the dev database's data was untouched (the prompt
+      aborted with no TTY rather than proceeding) before moving on. Flagging for whoever picks this
+      up next rather than touching the dev database further mid-testing-task.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
