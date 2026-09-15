@@ -199,7 +199,7 @@ Infrastructure only, with just enough of a test to prove the wiring works end to
 
 ### Step 4 — Pure unit tests
 
-**Status:** not started · **Size:** S — no mocks, no DB, no DOM
+**Status:** done (2026-09-15) · **Size:** S — no mocks, no DB, no DOM
 
 The cheapest real signal in the repo. All four targets are pure functions or plain classes.
 
@@ -238,8 +238,8 @@ The cheapest real signal in the repo. All four targets are pure functions or pla
 - `leave` on an unknown socket returns `undefined`; `getSocketIds` drives sender exclusion.
 
 **Done when:**
-- [ ] All four modules covered at the case level above
-- [ ] No mocking anywhere in this step
+- [x] All four modules covered at the case level above
+- [x] No mocking anywhere in this step
 
 ---
 

@@ -1384,6 +1384,59 @@ reproducing the exact failure mode before and after.
       format:check) — all green from a fresh install, not just in this already-`npm install`ed
       working tree.
 
+- [x] Testing, step 4/8 — pure unit tests, no mocks/DB/DOM —
+      [tasks/23-testing.md](tasks/23-testing.md#step-4--pure-unit-tests). 34 assertions across the
+      four modules named in the task, all against real dependencies (the actual
+      `@dnd-kit/sortable`/`fractional-indexing` libraries, not reimplementations of them).
+      **[position.test.ts](apps/web/src/lib/position.test.ts)** — `computeReorderPosition`'s five
+      siblings are built with real `generateNKeysBetween` output, not hand-typed strings, and every
+      expected result is computed with `generateKeyBetween` in the test itself rather than a
+      hard-coded literal, so the assertions describe the *relationship* being tested, not a magic
+      value. Move down/up (and the comment spelling out why they're not mirror images — arrayMove
+      removes before inserting, so the neighbor pair differs depending on direction), top/bottom
+      insertion, a single-item list, drop-on-self (pinned as *not* a no-op — it generates a new key
+      between the same neighbors rather than returning the existing one), and the unknown-`activeId`
+      case.
+      **The unknown-`activeId` case took two tries to get right**: the first attempt assumed it was
+      equivalent to explicitly moving the actual last sibling (matching the task's own framing of
+      "silently relocates the wrong sibling"), and that assumption was wrong — traced by literally
+      instrumenting the function with `console.log` outside the test suite before writing the
+      assertion. `findIndex` returns -1 *twice* here, not once: once for `oldIndex` (arrayMove's
+      documented behavior of removing the last element) and again for the *second* lookup
+      (`newIndex`, against the already-reordered array, where the unknown id still isn't found
+      either) — so `prev` is always out-of-bounds (`undefined`) and `next` is always the reordered
+      array's first element, independent of which sibling `overId` named. Pinned against a
+      hand-computed `arrayMove` call in the test rather than a restated assumption, after
+      confirming the real value with the instrumented run.
+      `comparePosition` — plain byte order, plus a direct proof it disagrees with `localeCompare`
+      on the exact mixed-case pairs noted in PROGRESS.md's tasks/18 entry (asserted against the
+      *sign* of `localeCompare`'s own result, not a hard-coded expectation, so the test documents
+      the disagreement rather than assuming it).
+      **[cost.test.ts](apps/web/src/lib/cost.test.ts)** — `parseCostInput`'s `null` (cleared) vs.
+      `undefined` (unusable) distinction, symbol/comma/whitespace stripping, rounding (the
+      `4.999` → `500` example from the cost-tracking task), and the `COST_CENTS_MAX` boundary
+      computed from the real exported constant (exact accept at the max, refuse one cent over —
+      float precision checked directly rather than assumed, since `(COST_CENTS_MAX/100).toFixed(2)`
+      round-tripping exactly back to the integer was worth confirming, not assuming). `Todo`/
+      `SubTask` fixtures satisfy the real shared zod-inferred types, not loosely-typed stand-ins.
+      `subtaskSubtotalCents`/`listTotalCents` — null costs skipped, a todo's own cost and its
+      subtasks' costs both counted and not double-counted (the tasks/01 rollup decision).
+      **[conflict.test.ts](apps/server/src/conflict.test.ts)** — `base: undefined` → false, a
+      disagreeing field → true, and the regression assertion this function exists for: a
+      concurrent edit to a *different* field than the one in `base` → false (the false-positive the
+      old row-`version` check used to produce). Also empty `base` and multi-field `base` with one
+      mismatch.
+      **[presence.test.ts](apps/server/src/presence.test.ts)** — two sockets for one member (leave
+      one, member stays present until the last socket goes; verified via both `getMembers` and
+      `getSocketIds`), re-joining an already-joined socket (no duplicate/orphan) and re-joining
+      under a *different* list (moves the socket rather than leaving it present on both — not in
+      the task's bullet list verbatim but the same `join`-calls-`leave`-first mechanism, and a real
+      gap if `leave`'s no-op case relies on it), `leave` on an unknown socket (`undefined`, no
+      state change), and `getSocketIds`/`getMembers` isolation across multiple members and lists.
+      **Verified**: `npm test` — 34/34 across 6 files (2 scaffolding placeholders from step 3 plus
+      these 4). Full `typecheck`/`lint`/`format:check`/`build` clean; confirmed `dist/` still has
+      no `.test.*` output (tsconfig.build.json from step 3 still doing its job).
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
