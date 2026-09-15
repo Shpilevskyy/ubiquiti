@@ -1294,6 +1294,47 @@ reproducing the exact failure mode before and after.
       line in its own priority list; corrected to match. Remaining 7 steps not started — see
       tasks/23 for the plan (one step per session/PR, steps 1-2 are prerequisites for the rest).
 
+- [x] Testing, step 2/8 — extracted `buildApp()` from `index.ts` —
+      [tasks/23-testing.md](tasks/23-testing.md#step-2--extract-buildapp-from-indexts). Refactor
+      only, no tests added, no behavior change — the prerequisite for every server-side test in the
+      rest of tasks/23, since importing the old `index.ts` started a real server on port 3001 via a
+      module-scope `await app.listen()`.
+      **New [app.ts](apps/server/src/app.ts)**: exports `buildApp({ broadcaster, isProduction })`,
+      containing everything from the `Fastify({...})` constructor through route/static
+      registration — error handling (still registered first, since Fastify bakes the current
+      handlers into each route's context at registration time), helmet, rate limit, the zod
+      compilers, the `clientId` hook, `/healthz`, and the three route plugins. No `listen()`, no
+      signal handlers, no side effects — a test can call it directly and drive it with
+      `app.inject()`.
+      **The ordering problem the task flagged, and how it's resolved**: `buildApp()` takes the
+      broadcaster as a parameter (so route tests can pass a spy with no sockets/ports involved),
+      but the *real* broadcaster is `registerSocketHandlers(io, app.log)`, and both `io` and
+      `app.log` need `app.server`/`app` to already exist — which `buildApp()` itself constructs.
+      [index.ts](apps/server/src/index.ts) breaks the cycle with a thin forwarding shim: a
+      `broadcaster` object whose `broadcastToList` closes over a `let realBroadcaster` that starts
+      `undefined` and is assigned the instant `app.server` exists (right after `buildApp()`
+      returns, before `app.listen()`). Routes only ever call `app.broadcaster.broadcastToList` at
+      request time — never during registration — so by the time any request could reach it,
+      `realBroadcaster` is long since set; the shim is invisible at runtime. (Consistent with this
+      repo's existing convention of allowing `!` where non-nullness is guaranteed by an adjacent
+      runtime fact, per tasks/12's `noNonNullAssertion` decision.)
+      **`index.ts` now just**: builds the shim, calls `buildApp()`, creates the Socket.IO server
+      against `app.server`, wires the real broadcaster into the shim, `app.listen()`, and the
+      unchanged SIGTERM/SIGINT shutdown block.
+      **One deliberate deviation from the task's literal type signature**: the task writes
+      `buildApp(...): FastifyInstance`; this returns `Promise<FastifyInstance>` (an `async`
+      function) instead, so the internal `await app.register(...)` calls could stay exactly as they
+      were rather than becoming unawaited/floating — preserving the original registration order
+      byte-for-byte took priority over matching the sketch's literal (non-`Promise`) annotation.
+      **Verified**: full monorepo build/typecheck/lint clean. Ran an isolated instance on a spare
+      port (3099, not the shared dev server on 3001 another session had running) against the local
+      docker-compose Postgres: `/healthz` 200s, `GET`/`POST`/`PATCH`/`DELETE /api/lists` all work;
+      two real `socket.io-client` connections joined the same list room and confirmed a PATCH from
+      one client's `X-Client-Id` delivered `list:updated` to the other client and *not* back to the
+      originator — proving the forwarding-shim broadcaster wiring actually works, not just
+      typechecks. Sent `SIGTERM` and confirmed the same clean-exit log sequence as before this
+      refactor. Cleaned up the throwaway test list afterward.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

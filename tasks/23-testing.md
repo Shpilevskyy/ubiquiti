@@ -130,7 +130,7 @@ Do this first so no later session builds against a stale spec. In
 
 ### Step 2 — Extract `buildApp()` from `index.ts`
 
-**Status:** not started · **Size:** S — refactor only, **zero tests, zero behavior change**
+**Status:** done (2026-09-15) · **Size:** S — refactor only, **zero tests, zero behavior change**
 
 The prerequisite for everything server-side. Landing it separately from any test file is the point:
 per [../CLAUDE.md](../CLAUDE.md), a known-needed refactor goes in as its own small step rather than
@@ -165,10 +165,10 @@ broadcaster as a parameter sidesteps it cleanly.
 serves the API, the UI, and realtime; SIGTERM still shuts down gracefully.
 
 **Done when:**
-- [ ] `buildApp()` is importable with no side effects — no `listen`, no signal handlers
-- [ ] `index.ts` is the thin entry point: io server, listen, shutdown
-- [ ] Broadcaster is injected, not constructed inside `buildApp()`
-- [ ] No behavior change — this PR adds no tests
+- [x] `buildApp()` is importable with no side effects — no `listen`, no signal handlers
+- [x] `index.ts` is the thin entry point: io server, listen, shutdown
+- [x] Broadcaster is injected, not constructed inside `buildApp()`
+- [x] No behavior change — this PR adds no tests
 
 ---
 
