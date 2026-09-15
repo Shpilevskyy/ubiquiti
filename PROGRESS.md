@@ -1279,6 +1279,21 @@ reproducing the exact failure mode before and after.
       session, see [tasks/DEFERRED.md](tasks/DEFERRED.md)) and rewriting the pushed "UI
       improvments" commit message typo, which would need a force-push.
 
+- [x] Testing, step 1/8 — corrected specs/11 and DEFERRED.md —
+      [tasks/23-testing.md](tasks/23-testing.md#step-1--correct-specs11-and-deferredmd). Docs only,
+      no code, per that step's own scope. [specs/11-testing-strategy.md](specs/11-testing-strategy.md)
+      now: Supertest → `app.inject()`; backend item 1 (position/reordering math) replaced with the
+      neighbor-selection cases for `computeReorderPosition` (the float-scheme midpoint/epsilon
+      content it described no longer exists, per [18](tasks/18-fractional-string-indexing.md)); the
+      socket boundary corrected to `hooks/useListSocket.ts` (`lib/socket.ts` was never real); the
+      frontend component list corrected to name `TodoDescription.tsx` and the inline add-todo form
+      in `ListPage.tsx` rather than the never-built `DescriptionEditor`/`AddTodoForm`; and the
+      realtime-broadcast testing approach updated to the spy-broadcaster-plus-one-real-socket-test
+      split tasks/23 step 2 introduces, rather than `socket.io-client` for everything.
+      [tasks/DEFERRED.md](tasks/DEFERRED.md)'s testing section had the same stale float-precision
+      line in its own priority list; corrected to match. Remaining 7 steps not started — see
+      tasks/23 for the plan (one step per session/PR, steps 1-2 are prerequisites for the rest).
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

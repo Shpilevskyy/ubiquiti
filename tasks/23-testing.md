@@ -98,7 +98,7 @@ for the server project so parallel files don't share one database and interfere.
 
 ### Step 1 — Correct specs/11 and DEFERRED.md
 
-**Status:** not started · **Size:** XS — docs only, no code
+**Status:** done (2026-09-15) · **Size:** XS — docs only, no code
 
 Do this first so no later session builds against a stale spec. In
 [../specs/11-testing-strategy.md](../specs/11-testing-strategy.md):
@@ -122,9 +122,9 @@ Do this first so no later session builds against a stale spec. In
   one real `socket.io-client` test for the wiring) rather than `socket.io-client` for all of it.
 
 **Done when:**
-- [ ] specs/11 describes the app as it exists on 2026-09-15
-- [ ] DEFERRED.md's testing section points at this task and drops the float-precision line
-- [ ] No code changed
+- [x] specs/11 describes the app as it exists on 2026-09-15
+- [x] DEFERRED.md's testing section points at this task and drops the float-precision line
+- [x] No code changed
 
 ---
 

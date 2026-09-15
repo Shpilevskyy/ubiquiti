@@ -22,8 +22,8 @@ If it's ever picked up, the three highest-value tests — the ones covering logi
 easy to get wrong, in rough order:
 
 1. **`computeReorderPosition`** ([../apps/web/src/lib/position.ts](../apps/web/src/lib/position.ts))
-   — pure function, no mocking, ~20 lines of test. Midpoint, insertion at both ends, and the
-   documented float-precision limitation. Cheapest possible unit test in the codebase.
+   — pure function, no mocking, ~20 lines of test. Move up/down, insertion at both ends, single-item
+   list, drop-on-self, and an unknown `activeId`. Cheapest possible unit test in the codebase.
 2. **Outbox flush ordering and retry policy** — FIFO preserved, success dequeues, 404 drops and
    continues, network error stops and retries. This is where the defects in
    [03](03-outbox-reliability.md) live, so tests here are what keep them fixed. `fake-indexeddb`
