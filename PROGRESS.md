@@ -1686,6 +1686,33 @@ reproducing the exact failure mode before and after.
       a freshly created database (step 6), but this session hasn't pushed to the remote, so an
       actual GitHub Actions run is still unobserved.
 
+- [x] "Syncing N/M" flush-progress indicator, in place of just an "Offline" pill, for the
+      lost-connection → made-changes → back-online case. `lib/outboxSync.ts`'s `flush()` already
+      knew how far it had gotten through a batch; it just wasn't telling anyone. Added a
+      `FlushProgress` type (`{ sent, total } | null`) and an optional `onProgress` callback to
+      `OutboxSyncCallbacks`, called before each op is attempted (`total` recomputed each time as
+      `sent + queue.length`, so an op enqueued mid-flush — e.g. the user adds another todo while a
+      backlog is still replaying — is reflected rather than invisible until a later run) and once
+      more with `null` in the `finally` block, so it clears whether the batch fully drained or
+      stopped early for a backoff retry. `sentCount` advances on every op that leaves the queue,
+      including the two "permanent failure" drop paths (404, other 4xx), not just successful sends
+      — those are still progress through the batch. `useList` wires `onProgress` to a new
+      `flushProgress` state (returned alongside the existing `conflictNotice`) via the same
+      `useState`-in-a-plain-callback pattern `useNotice` already established; `ListPage` renders
+      "Syncing {sent}/{total}" in the pill slot next to the title, taking priority over the
+      "Offline" pill when both would otherwise apply (a successful send during the flush can flip
+      `connectionStatus` back to online before the batch finishes, so showing both would be
+      redundant/confusing).
+      **Verified**: new `outboxSync.test.ts` case asserts the exact progress sequence for a 2-op
+      flush (`{sent:0,total:2}` while the first is in flight, `{sent:1,total:2}` once it lands, then
+      `null` once the batch drains) using the existing held-open-promise pattern from the FIFO-order
+      test. Full suite (118 tests) clean. Browser-verified against a real dev server: patched
+      `window.fetch` with an artificial per-request delay (debug-only, not a code change) to widen
+      the normally sub-millisecond local flush window, queued 3 todos while offline
+      (`connectionStatus.markOffline()`), triggered reconnect, and screenshotted the pill
+      transitioning "Syncing 0/3" → "Syncing 1/3" → gone, with all 3 items confirmed persisted via a
+      hard reload afterward. Clean full build.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the

@@ -31,6 +31,7 @@ function ListPageContent({ listId }: { listId: string }) {
     updateListTitle,
     conflictNotice,
     dismissConflictNotice,
+    flushProgress,
   } = useListContext();
 
   // `data` is checked before `isError`, not after: TanStack's 'error' action (query-core's
@@ -99,13 +100,22 @@ function ListPageContent({ listId }: { listId: string }) {
           </div>
 
           <div className="flex items-center gap-3">
-            {connectionStatus === 'offline' && (
+            {flushProgress ? (
               <span
                 role="status"
-                className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+                className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700"
               >
-                Offline
+                Syncing {flushProgress.sent}/{flushProgress.total}
               </span>
+            ) : (
+              connectionStatus === 'offline' && (
+                <span
+                  role="status"
+                  className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+                >
+                  Offline
+                </span>
+              )
             )}
             {others.length > 0 && (
               <div className="flex -space-x-2">

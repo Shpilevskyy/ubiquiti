@@ -23,11 +23,21 @@ const DISCARDED_MESSAGE = 'A change could not be saved and was discarded';
 const FLUSH_POLL_MS = 15000;
 const FLUSH_CONFLICT_MESSAGE = 'Some changes were also edited elsewhere';
 
+// null when no flush is currently running for the list. `total` is the size of the batch this
+// flush run is working through — recomputed on every op rather than fixed at the start, so an op
+// enqueued mid-flush (e.g. the user adds another todo while a backlog is still replaying) is
+// reflected rather than left invisible until a later run.
+export type FlushProgress = { sent: number; total: number } | null;
+
 export interface OutboxSyncCallbacks {
   onNotice: (message: string) => void;
   // Called once a flush batch has fully drained (or immediately, if reconcile was requested and
   // nothing needed sending) — the caller's job is to refetch/resync its view of the list.
   onInvalidate: () => void;
+  // Reports how far the current flush has gotten (e.g. "3/10"), so the UI can show a syncing
+  // indicator after the user comes back online with queued changes. Called with null when no
+  // flush is in progress, including right before this callback set is torn down.
+  onProgress?: (progress: FlushProgress) => void;
 }
 
 interface SyncState {
@@ -38,6 +48,7 @@ interface SyncState {
   // queue, both send the same head-of-queue op, and race each other's dequeue — this is also what
   // made the outbox.ts atomicity bug (tasks/03) reachable in practice, not just enqueue-vs-flush.
   isFlushing: boolean;
+  progress: FlushProgress;
   retryDelay: number;
   retryTimeout: ReturnType<typeof setTimeout> | undefined;
   pollInterval: ReturnType<typeof setInterval> | undefined;
@@ -55,6 +66,13 @@ function notifyNotice(state: SyncState, message: string) {
 function notifyInvalidate(state: SyncState) {
   state.callbacks.forEach((cb) => {
     cb.onInvalidate();
+  });
+}
+
+function notifyProgress(state: SyncState, progress: FlushProgress) {
+  state.progress = progress;
+  state.callbacks.forEach((cb) => {
+    cb.onProgress?.(progress);
   });
 }
 
@@ -91,14 +109,18 @@ async function flush(listId: string, { reconcile = false }: { reconcile?: boolea
     // gotten (tasks/05). One op per notice would be noisy for a whole backlog replaying at once,
     // so this aggregates to a single notice for the flush instead.
     let hadConflictAny = false;
+    let sentCount = 0;
     while (true) {
-      const [op] = await getQueue(listId);
+      const queue = await getQueue(listId);
+      const op = queue[0];
       if (!op) break;
+      notifyProgress(state, { sent: sentCount, total: sentCount + queue.length });
 
       try {
         const response = await sendOp<{ hadConflict?: boolean }>(op);
         await dequeue(listId, op.opId);
         sentAny = true;
+        sentCount++;
         if (response?.hadConflict) hadConflictAny = true;
         // A successful request is the strongest possible evidence we're online — feeds back into
         // the belief connectionStatus tracks (and the "Offline" pill reads), so a successful poll
@@ -108,6 +130,7 @@ async function flush(listId: string, { reconcile = false }: { reconcile?: boolea
       } catch (err) {
         if (err instanceof HttpError && err.status === 404) {
           await dequeue(listId, op.opId);
+          sentCount++;
           notifyNotice(state, 'This item no longer exists');
           continue;
         }
@@ -115,6 +138,7 @@ async function flush(listId: string, { reconcile = false }: { reconcile?: boolea
           // Any other 4xx (e.g. a rejected body) is permanent, not transient — retrying it every
           // poll would head-of-line-block every op queued behind it forever.
           await dequeue(listId, op.opId);
+          sentCount++;
           notifyNotice(state, DISCARDED_MESSAGE);
           continue;
         }
@@ -123,6 +147,7 @@ async function flush(listId: string, { reconcile = false }: { reconcile?: boolea
         const attempts = await recordAttempt(listId, op.opId);
         if (attempts >= MAX_FLUSH_ATTEMPTS) {
           await dequeue(listId, op.opId);
+          sentCount++;
           notifyNotice(state, DISCARDED_MESSAGE);
           continue;
         }
@@ -143,6 +168,10 @@ async function flush(listId: string, { reconcile = false }: { reconcile?: boolea
     if (hadConflictAny) notifyNotice(state, FLUSH_CONFLICT_MESSAGE);
   } finally {
     state.isFlushing = false;
+    // Covers both exit paths — the queue fully drained, or this run stopped early to await a
+    // backoff retry — either way this run is no longer actively sending, so no progress bar
+    // should be shown until the next attempt reports its own.
+    if (state.progress) notifyProgress(state, null);
   }
 }
 
@@ -156,6 +185,7 @@ export function start(listId: string, callbacks: OutboxSyncCallbacks): () => voi
       refCount: 0,
       callbacks: new Set(),
       isFlushing: false,
+      progress: null,
       retryDelay: FLUSH_RETRY_BASE_MS,
       retryTimeout: undefined,
       pollInterval: undefined,

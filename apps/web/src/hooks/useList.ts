@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { produce } from 'immer';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateKeyBetween } from 'fractional-indexing';
 import type { GetListResponse, SubTask, Todo } from '@ubiquiti-todo/shared';
@@ -8,7 +8,7 @@ import { useNotice } from './useNotice';
 import { api, HttpError, sendOp } from '../lib/api';
 import { connectionStatus } from '../lib/connectionStatus';
 import { dequeue, enqueue, type QueuedOp } from '../lib/outbox';
-import { start as startOutboxSync } from '../lib/outboxSync';
+import { start as startOutboxSync, type FlushProgress } from '../lib/outboxSync';
 import { comparePosition } from '../lib/position';
 
 const DISCARDED_MESSAGE = 'A change could not be saved and was discarded';
@@ -49,6 +49,7 @@ export function useList(listId: string | undefined) {
   const navigate = useNavigate();
   const queryKey = ['list', listId];
   const { notice, showNotice, dismissNotice } = useNotice();
+  const [flushProgress, setFlushProgress] = useState<FlushProgress>(null);
 
   const listQuery = useQuery({
     queryKey,
@@ -147,7 +148,11 @@ export function useList(listId: string | undefined) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above.
   useEffect(() => {
     if (!listId) return;
-    return startOutboxSync(listId, { onNotice: showNotice, onInvalidate: invalidate });
+    return startOutboxSync(listId, {
+      onNotice: showNotice,
+      onInvalidate: invalidate,
+      onProgress: setFlushProgress,
+    });
   }, [listId]);
 
   // TanStack Query has its own network-awareness — by default (networkMode: 'online') it pauses
@@ -546,5 +551,6 @@ export function useList(listId: string | undefined) {
     updateListTitle,
     conflictNotice: notice,
     dismissConflictNotice: dismissNotice,
+    flushProgress,
   };
 }

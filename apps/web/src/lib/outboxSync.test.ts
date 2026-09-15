@@ -85,6 +85,37 @@ describe('outboxSync', () => {
     stop();
   });
 
+  it('reports sent/total progress while flushing and clears it once drained', async () => {
+    const { outbox, outboxSync, api } = await loadFresh();
+    const listId = crypto.randomUUID();
+    await outbox.enqueue(listId, { method: 'POST', path: '/a', body: {} });
+    await outbox.enqueue(listId, { method: 'POST', path: '/b', body: {} });
+
+    let resolveA: (() => void) | undefined;
+    vi.mocked(api.sendOp).mockImplementation(async (op) => {
+      if (op.path === '/a') {
+        await new Promise<void>((resolve) => {
+          resolveA = resolve;
+        });
+      }
+      return {};
+    });
+
+    const onProgress = vi.fn();
+    const stop = outboxSync.start(listId, { onNotice: vi.fn(), onInvalidate: vi.fn(), onProgress });
+    await flushRealMacrotasks();
+    // '/a' is in flight: nothing sent yet, two ops total in this batch.
+    expect(onProgress).toHaveBeenLastCalledWith({ sent: 0, total: 2 });
+
+    resolveA?.();
+    await flushRealMacrotasks();
+    // '/a' landed, '/b' picked up before it resolves.
+    expect(onProgress).toHaveBeenCalledWith({ sent: 1, total: 2 });
+    // The batch fully drained — progress clears back to null rather than staying at 2/2.
+    expect(onProgress).toHaveBeenLastCalledWith(null);
+    stop();
+  });
+
   it('dequeues on success and marks connectionStatus online', async () => {
     const { outbox, outboxSync, api, connectionStatus } = await loadFresh();
     connectionStatus.markOffline();
