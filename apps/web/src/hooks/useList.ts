@@ -508,6 +508,27 @@ export function useList(listId: string | undefined) {
     },
   });
 
+  // Renaming a list (specs/03-api-rest.md's PATCH /lists/:listId — "rename"): the server route,
+  // the LIST_UPDATED broadcast, and this client's own handler for that broadcast (useListSocket)
+  // all already existed — nothing in the UI ever called it. Same reasoning as deleteList just
+  // above for going online-only outside the outbox rather than through mutateWithOutbox: List has
+  // no version column, so there's no conflict/base value to compare, and OFFLINE_AWARE + an
+  // explicit check (rather than the default networkMode: 'online', which pauses invisibly —
+  // tasks/06) fails fast with a notice instead of leaving a Save silently stuck.
+  const updateListTitle = useMutation({
+    ...OFFLINE_AWARE,
+    mutationFn: (title: string) => {
+      if (connectionStatus.getStatus() !== 'online') {
+        showNotice("Can't rename while offline");
+        throw new Error('Offline');
+      }
+      return api.updateList(listId!, { title });
+    },
+    onSuccess: ({ list }) => {
+      queryClient.setQueryData<GetListResponse>(queryKey, (old) => old && { ...old, list });
+    },
+  });
+
   return {
     listQuery,
     createTodo,
@@ -522,6 +543,7 @@ export function useList(listId: string | undefined) {
     reorderSubTask,
     deleteSubTask,
     deleteList,
+    updateListTitle,
     conflictNotice: notice,
     dismissConflictNotice: dismissNotice,
   };

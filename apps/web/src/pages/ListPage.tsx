@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ListTitle } from '../components/ListTitle';
 import { TodoList } from '../components/TodoList';
 import { ListProvider, useListContext } from '../context/ListContext';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
@@ -23,8 +24,14 @@ function ListPageContent({ listId }: { listId: string }) {
   const others = useListSocket(listId);
   const connectionStatus = useConnectionStatus();
 
-  const { listQuery, createTodo, deleteList, conflictNotice, dismissConflictNotice } =
-    useListContext();
+  const {
+    listQuery,
+    createTodo,
+    deleteList,
+    updateListTitle,
+    conflictNotice,
+    dismissConflictNotice,
+  } = useListContext();
 
   // `data` is checked before `isError`, not after: TanStack's 'error' action (query-core's
   // #dispatch) sets `status: 'error'` on ANY failed fetch — including a background refetch on an
@@ -83,7 +90,9 @@ function ListPageContent({ listId }: { listId: string }) {
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h1 className="min-w-0 truncate text-xl font-semibold text-slate-900">{list.title}</h1>
+            <h1 className="min-w-0 flex-1">
+              <ListTitle title={list.title} onSave={(title) => updateListTitle.mutate(title)} />
+            </h1>
             {totalCents > 0 && (
               <span className="text-sm text-slate-400">Total: {formatCents(totalCents)}</span>
             )}

@@ -6,6 +6,7 @@ import {
   type GetListsResponse,
   type List,
   type ListsQuery,
+  type UpdateListBody,
 } from '@ubiquiti-todo/shared';
 import { connectionStatus } from './connectionStatus';
 import { getMember } from './member';
@@ -90,6 +91,12 @@ export const api = {
   },
 
   getList: (listId: string) => request<GetListResponse>(`/lists/${listId}`),
+
+  // Renaming a list (specs/03-api-rest.md's PATCH /lists/:listId — "rename"). The server route,
+  // the LIST_UPDATED broadcast, and this client's handler for that broadcast (useListSocket) all
+  // already existed; this was the missing piece — nothing in the UI ever called it.
+  updateList: (listId: string, body: UpdateListBody) =>
+    request<{ list: List }>(`/lists/${listId}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
   deleteList: (listId: string) => request<void>(`/lists/${listId}`, { method: 'DELETE' }),
 };

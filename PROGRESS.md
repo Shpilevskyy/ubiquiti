@@ -1223,6 +1223,62 @@ reproducing the exact failure mode before and after.
       drag handles and Delete buttons visible and correctly sized without needing hover. Re-checked
       the same list at desktop width to confirm no regression there. No console errors.
 
+- [x] Fixes from a pre-submission review (2026-09-14/15), all browser/API-verified against a
+      fresh local server and the live Render deploy:
+      **Subtask route scoping** (a real defect, same class as tasks/04 but one level deeper):
+      subtask PATCH/DELETE scoped queries to `todoId` alone, ignoring the `listId` in the URL —
+      a request naming the right subtask under the *wrong* list still mutated the row and then
+      broadcast to a room nobody was in. Fixed by scoping to `todo: { listId }` too, in both
+      [apps/server/src/routes/subtasks.ts](apps/server/src/routes/subtasks.ts)'s PATCH and DELETE.
+      **Cost/length bounds**: `costCents` had no upper bound against Postgres `INTEGER`, so a
+      large value 500'd — and since 5xx is retried, one bad value blocked a list's whole outbox
+      queue for ~10 retries before being discarded. No lower bound either (negative costs
+      accepted). No length cap on `title`/`descriptionMd` (a 100KB title went through). Added
+      `CostCentsSchema` (`.min(0).max(2_147_483_647)`) and `TitleSchema`/`DescriptionSchema` as
+      shared primitives in [packages/shared/src/index.ts](packages/shared/src/index.ts), used
+      across all six body schemas; `COST_CENTS_MAX` also exported and used by
+      [lib/cost.ts](apps/web/src/lib/cost.ts)'s `parseCostInput` so the client refuses what the
+      server would reject, rather than a value silently blocking the queue for two minutes before
+      the discard.
+      **`api.ts` bug**: `body?.error.message` stopped one optional-chain short of `error?.message`
+      — an error body without the expected shape (e.g. from a proxy) threw a TypeError instead of
+      an `HttpError`, which the outbox then misfiled as a retryable network failure. Fixed.
+      **Subtotal display**: "Subtotal: $X" rendered under every todo with subtasks, including
+      "$0.00" when none were priced — contradicted the list header's own total, which already
+      hides at zero. Now hides at zero too, matching the rest of the app's optional-affordance
+      convention (presence avatars, the Offline pill).
+      **Rate limit headroom**: 100/min per IP was measuring the wrong thing — it's global
+      (covers static assets too) and per-IP (two collaborating browser tabs share one), putting a
+      normal two-person demo within reach of a 429. Raised to 600/min.
+      **README**: never mentioned the live URL. Now leads with it, plus pointers into `specs/`.
+      **Live deploy cleanup**: two leftover test lists from the 2026-09-11 offline-sync session
+      were still on the public landing page; deleted.
+      **CI had never once passed** since the workflow was added (all runs red, including on
+      commits before this session) — `npm run typecheck` type-checks against `@prisma/client` but
+      never generates it; `npm run build` does (the server's build script runs `prisma generate`
+      first), so this passed locally wherever a prior build had left a client in `node_modules`,
+      and failed on every clean `npm ci`. Fixed in the script (`typecheck` now runs a new
+      `db:generate` first — delegated to the server workspace, not run with `--schema` from the
+      root, since generating from the root resolves the client's runtime `.env` lookup against the
+      wrong directory) rather than papering over it with a CI-only step, so a fresh clone works
+      too. Verified in a clean room: copied the tree without `node_modules`/`dist`/`.env`, ran
+      `npm ci`, then the exact CI step sequence — first genuinely green run in the repo's history.
+      Also added `format:check` (`biome format .`, no writes) as its own CI step and root script,
+      catching the 22-file formatting drift that had built up with nothing to catch it.
+      **List rename**: `PATCH /lists/:listId` ("rename" per
+      [specs/03-api-rest.md](specs/03-api-rest.md)) and the `LIST_UPDATED` broadcast/handler all
+      already existed on both sides, but no UI ever called it. Completed rather than removed,
+      since the spec names it as an intended endpoint, not incidental surface: added
+      `api.updateList`, a `updateListTitle` mutation in `useList.ts` (online-only + explicit check
+      like `deleteList`, for the same reason — List has no version column, and the default
+      `networkMode: 'online'` pauses invisibly instead of failing fast), and a new
+      [`ListTitle.tsx`](apps/web/src/components/ListTitle.tsx) click-to-edit component mirroring
+      `CostInput`/`TodoDescription`'s pattern. Browser-verified: click → edit → blur saves and
+      persists server-side; Escape discards without saving.
+      Deliberately not touched, per explicit instruction: adding tests (deferred to a separate
+      session, see [tasks/DEFERRED.md](tasks/DEFERRED.md)) and rewriting the pushed "UI
+      improvments" commit message typo, which would need a force-push.
+
 ## Next up
 
 **The backlog now lives in [tasks/](tasks/) — read [tasks/README.md](tasks/README.md) for the
